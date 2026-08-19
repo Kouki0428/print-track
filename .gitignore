@@ -1,0 +1,8 @@
+node_modules
+dist
+dist-electron
+out
+*.log
+print-track.db
+print-track.db-wal
+print-track.db-shm
