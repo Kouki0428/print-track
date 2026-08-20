@@ -43,9 +43,16 @@ function createWindow(): void {
 
   if (isDev) {
     // 使用 vite-plugin-electron/simple 注入的 dev server 地址（避免端口写死导致白屏）
-    const url = process.env.VITE_DEV_SERVER_URL || 'http://localhost:5173'
-    win.loadURL(url)
-    win.webContents.openDevTools({ mode: 'detach' })
+    const url = process.env.VITE_DEV_SERVER_URL
+    if (!url) {
+      dialog.showErrorBox(
+        '开发服务器未就绪',
+        '未检测到 VITE_DEV_SERVER_URL。\n请确认 vite dev server 已随 npm run dev 正常启动（检查终端有无报错）。',
+      )
+    } else {
+      win.loadURL(url)
+      win.webContents.openDevTools({ mode: 'detach' })
+    }
   } else {
     win.loadFile(path.join(__dirname, '../dist/index.html'))
   }
