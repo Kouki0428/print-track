@@ -9,6 +9,15 @@ export default defineConfig({
     electron({
       main: {
         entry: 'electron/main.ts',
+        // better-sqlite3 是原生 CJS 模块，必须作为外部依赖交给 Electron 的 Node 直接加载，
+        // 不能被 rollup 打包进主进程（打包会破坏其 CJS 运行环境，导致 __filename is not defined）。
+        vite: {
+          build: {
+            rollupOptions: {
+              external: ['better-sqlite3'],
+            },
+          },
+        },
       },
       preload: {
         input: 'electron/preload.ts',
