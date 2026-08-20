@@ -6,3 +6,7 @@ contextBridge.exposeInMainWorld('db', {
   run: (sql: string, params?: unknown[]) => ipcRenderer.invoke('db:run', sql, params),
   get: (sql: string, params?: unknown[]) => ipcRenderer.invoke('db:get', sql, params),
 })
+
+contextBridge.exposeInMainWorld('app', {
+  openDataFolder: () => ipcRenderer.invoke('app:open-data-folder'),
+})

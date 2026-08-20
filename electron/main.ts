@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog, shell } from 'electron'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import { applySchema } from './schema'
@@ -83,6 +83,13 @@ ipcMain.handle('db:get', (_e, sql: string, params: unknown[] = []) => {
 // 未捕获异常弹窗，避免「静默无界面」
 process.on('uncaughtException', (err) => {
   dialog.showErrorBox('未捕获错误', String(err))
+})
+
+// 打开数据目录（设置页使用）
+ipcMain.handle('app:open-data-folder', () => {
+  const dir = app.getPath('userData')
+  shell.openPath(dir)
+  return dir
 })
 
 app.whenReady().then(async () => {

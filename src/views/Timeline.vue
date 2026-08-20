@@ -8,13 +8,16 @@ import {
   type Work,
   type Schedule,
 } from '@/db/api'
+import BaseModal from '@/components/BaseModal.vue'
+import EmptyState from '@/components/EmptyState.vue'
 
 const works = ref<Work[]>([])
 const schedules = ref<Schedule[]>([])
-const showForm = ref(false)
+const showModal = ref(false)
 const form = ref({ work_id: '', planned_start: '', planned_end: '', priority: '0', note: '' })
 
 const COL_W = 38 // px/天
+const todayIso = new Date().toISOString().slice(0, 10)
 
 async function reload() {
   works.value = await listWorks()
@@ -24,12 +27,13 @@ onMounted(reload)
 
 const workName = (id: number) => works.value.find((w) => w.id === id)?.name || `#${id}`
 
-// 计算时间轴范围：以最早排期起点或今天为基准，至少覆盖 28 天
 const base = computed<Date>(() => {
   const starts = schedules.value.filter((s) => s.planned_start).map((s) => new Date(s.planned_start!))
-  const today = new Date(); today.setHours(0, 0, 0, 0)
-  const seed = starts.length ? new Date(Math.min(...starts.map((d) => d.getTime()))) : today
+  const t = new Date(); t.setHours(0, 0, 0, 0)
+  const seed = starts.length ? new Date(Math.min(...starts.map((d) => d.getTime()))) : t
   seed.setHours(0, 0, 0, 0)
+  // 周一对齐
+  seed.setDate(seed.getDate() - ((seed.getDay() + 6) % 7))
   return seed
 })
 
@@ -41,14 +45,17 @@ const totalDays = computed<number>(() => {
 })
 
 const weeks = computed(() => {
-  const arr: { label: string; days: { idx: number; date: string }[] }[] = []
+  const arr: { month: string; days: { idx: number; date: string; iso: string; today: boolean }[] }[] = []
   for (let i = 0; i < totalDays.value; i += 7) {
     const days = []
+    let month = ''
     for (let j = 0; j < 7 && i + j < totalDays.value; j++) {
       const d = new Date(base.value.getTime() + (i + j) * 86400000)
-      days.push({ idx: i + j, date: `${d.getMonth() + 1}/${d.getDate()}` })
+      const iso = d.toISOString().slice(0, 10)
+      if (!month) month = `${d.getFullYear()}年${d.getMonth() + 1}月`
+      days.push({ idx: i + j, date: `${d.getMonth() + 1}/${d.getDate()}`, iso, today: iso === todayIso })
     }
-    arr.push({ label: `第${arr.length + 1}周`, days })
+    arr.push({ month, days })
   }
   return arr
 })
@@ -57,12 +64,15 @@ function dayIndex(dateStr: string | null): number {
   if (!dateStr) return 0
   return Math.round((new Date(dateStr).getTime() - base.value.getTime()) / 86400000)
 }
-
 function spanDays(s: Schedule): number {
   if (!s.planned_start || !s.planned_end) return 1
   return Math.max(1, Math.round((new Date(s.planned_end).getTime() - new Date(s.planned_start).getTime()) / 86400000) + 1)
 }
 
+function openCreate() {
+  form.value = { work_id: '', planned_start: todayIso, planned_end: '', priority: '0', note: '' }
+  showModal.value = true
+}
 async function addSchedule() {
   if (!form.value.work_id || !form.value.planned_start) return
   await createSchedule({
@@ -72,12 +82,11 @@ async function addSchedule() {
     priority: Number(form.value.priority),
     note: form.value.note,
   })
-  form.value = { work_id: '', planned_start: '', planned_end: '', priority: '0', note: '' }
-  showForm.value = false
+  showModal.value = false
   await reload()
 }
-
 async function remove(id: number) {
+  if (!window.confirm('确定删除这条排期？')) return
   await deleteSchedule(id)
   await reload()
 }
@@ -86,43 +95,18 @@ async function remove(id: number) {
 <template>
   <div>
     <div class="page-head">
-      <h2 class="page-title">时间线 / 排期</h2>
-      <button class="btn" @click="showForm = true">+ 新增排期</button>
+      <h1 class="page-title">时间线 / 排期</h1>
+      <button class="btn" @click="openCreate">+ 新增排期</button>
     </div>
 
-    <div v-if="showForm" class="card form">
-      <div class="row">
-        <label>作品
-          <select v-model="form.work_id">
-            <option value="">选择作品</option>
-            <option v-for="w in works" :key="w.id" :value="w.id">{{ w.name }}</option>
-          </select>
-        </label>
-        <label>开始<input v-model="form.planned_start" type="date" /></label>
-        <label>结束<input v-model="form.planned_end" type="date" /></label>
-        <label>优先级
-          <select v-model="form.priority">
-            <option :value="2">高</option>
-            <option :value="1">中</option>
-            <option :value="0">低</option>
-          </select>
-        </label>
-        <label>备注<input v-model="form.note" /></label>
-      </div>
-      <div class="actions">
-        <button class="btn" @click="addSchedule">保存</button>
-        <button class="btn ghost" @click="showForm = false">取消</button>
-      </div>
-    </div>
-
-    <div class="timeline">
+    <div v-if="schedules.length" class="card timeline">
       <div class="axis">
         <div class="axis-corner">作品</div>
         <div class="axis-weeks">
-          <div v-for="w in weeks" :key="w.label" class="week">
-            <div class="week-label">{{ w.label }}</div>
+          <div v-for="w in weeks" :key="w.month" class="week">
+            <div class="week-month">{{ w.month }}</div>
             <div class="week-days">
-              <span v-for="d in w.days" :key="d.idx" class="day">{{ d.date }}</span>
+              <span v-for="d in w.days" :key="d.idx" class="day" :class="{ today: d.today }">{{ d.date }}</span>
             </div>
           </div>
         </div>
@@ -135,47 +119,74 @@ async function remove(id: number) {
               v-if="s.planned_start"
               class="bar"
               :class="'p' + (s.priority ?? 0)"
-              :style="{ left: dayIndex(s.planned_start) * COL_W + 'px', width: spanDays(s) * COL_W - 2 + 'px' }"
+              :style="{ left: dayIndex(s.planned_start) * COL_W + 'px', width: spanDays(s) * COL_W - 3 + 'px' }"
             >
               <span class="bar-text">{{ workName(s.work_id) }}</span>
             </div>
-            <div class="bar-note" v-if="!s.planned_start">未设日期 · {{ s.note || '' }}</div>
+            <div v-else class="bar-note">未设日期 · {{ s.note || '' }}</div>
           </div>
           <button class="mini danger" @click="remove(s.id)">删</button>
         </div>
-        <div v-if="!schedules.length" class="empty">暂无排期，点击「新增排期」规划打印队列。</div>
       </div>
     </div>
+
+    <EmptyState v-else emoji="🗓️" title="还没有排期" desc="规划你的打印队列，按周视图排期，今天会以高亮显示。">
+      <button class="btn" @click="openCreate">+ 新增排期</button>
+    </EmptyState>
+
+    <BaseModal :open="showModal" title="新增排期" width="520px" @close="showModal = false">
+      <div class="form-grid">
+        <label class="field">作品
+          <select v-model="form.work_id" class="select">
+            <option value="">选择作品</option>
+            <option v-for="w in works" :key="w.id" :value="w.id">{{ w.name }}</option>
+          </select>
+        </label>
+        <label class="field">开始
+          <input v-model="form.planned_start" class="input" type="date" />
+        </label>
+        <label class="field">结束
+          <input v-model="form.planned_end" class="input" type="date" />
+        </label>
+        <label class="field">优先级
+          <select v-model="form.priority" class="select">
+            <option :value="2">高</option>
+            <option :value="1">中</option>
+            <option :value="0">低</option>
+          </select>
+        </label>
+        <label class="field">备注
+          <input v-model="form.note" class="input" placeholder="可选" />
+        </label>
+      </div>
+      <template #footer>
+        <button class="btn ghost" @click="showModal = false">取消</button>
+        <button class="btn" @click="addSchedule">保存</button>
+      </template>
+    </BaseModal>
   </div>
 </template>
 
 <style scoped>
-.page-head { display: flex; justify-content: space-between; align-items: center; }
-.card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-bottom: 16px; }
-.form .row { display: flex; gap: 14px; flex-wrap: wrap; }
-.form label { display: flex; flex-direction: column; font-size: 12px; color: var(--muted); gap: 4px; }
-.form input, .form select { padding: 7px 9px; border: 1px solid var(--line); border-radius: 8px; font-size: 14px; }
-.actions { margin-top: 12px; display: flex; gap: 10px; }
-.btn { padding: 8px 14px; border: none; border-radius: 8px; background: var(--accent); color: #fff; cursor: pointer; font-size: 14px; }
-.btn.ghost { background: #e9ebef; color: var(--text); }
-.timeline { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px; overflow-x: auto; }
+.timeline { overflow-x: auto; }
 .axis { display: flex; border-bottom: 1px solid var(--line); margin-bottom: 8px; }
-.axis-corner { width: 130px; flex-shrink: 0; font-weight: 600; font-size: 13px; color: var(--muted); }
+.axis-corner { width: 140px; flex-shrink: 0; font-weight: 700; font-size: 13px; color: var(--muted); }
 .axis-weeks { display: flex; }
 .week { border-left: 1px solid var(--line); }
-.week-label { font-size: 11px; color: var(--muted); padding: 4px 0; text-align: center; }
+.week-month { font-size: 11px; color: var(--muted); padding: 2px 0 4px; text-align: center; font-weight: 600; }
 .week-days { display: flex; }
-.day { width: 38px; text-align: center; font-size: 11px; color: var(--muted); padding: 2px 0; }
+.day { width: 38px; text-align: center; font-size: 11px; color: var(--muted); padding: 3px 0; }
+.day.today { color: var(--accent); font-weight: 700; background: var(--accent-weak); border-radius: 6px; }
 .rows { display: flex; flex-direction: column; gap: 6px; }
 .srow { display: flex; align-items: center; gap: 0; }
-.sname { width: 130px; flex-shrink: 0; font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.track { position: relative; height: 30px; flex-shrink: 0; }
-.bar { position: absolute; top: 3px; height: 24px; border-radius: 6px; display: flex; align-items: center; padding: 0 8px; color: #fff; font-size: 12px; overflow: hidden; white-space: nowrap; }
-.p2 { background: #d23f3f; }
-.p1 { background: #e8912f; }
-.p0 { background: #2f6fed; }
-.bar-note { font-size: 12px; color: var(--muted); line-height: 30px; }
-.mini { margin-left: 8px; border: 1px solid var(--line); background: #fff; border-radius: 7px; padding: 4px 8px; font-size: 12px; cursor: pointer; flex-shrink: 0; }
-.mini.danger { color: #d23f3f; border-color: #f0c5c5; }
-.empty { color: var(--muted); text-align: center; padding: 18px; }
+.sname { width: 140px; flex-shrink: 0; font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.track { position: relative; height: 32px; flex-shrink: 0; }
+.bar { position: absolute; top: 4px; height: 24px; border-radius: 7px; display: flex; align-items: center; padding: 0 8px; color: #fff; font-size: 12px; overflow: hidden; white-space: nowrap; box-shadow: var(--shadow-sm); }
+.p2 { background: linear-gradient(135deg, #e23c3c, #f06464); }
+.p1 { background: linear-gradient(135deg, #e8912f, #f0a44f); }
+.p0 { background: linear-gradient(135deg, #3b6fe0, #6f9bff); }
+.bar-note { font-size: 12px; color: var(--muted); line-height: 32px; }
+.mini { margin-left: 8px; border: 1px solid var(--line); background: var(--panel-2); border-radius: 7px; padding: 4px 9px; font-size: 12px; cursor: pointer; flex-shrink: 0; }
+.mini.danger { color: var(--red); border-color: var(--red-bg); }
+.mini.danger:hover { background: var(--red-bg); }
 </style>

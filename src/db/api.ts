@@ -126,6 +126,18 @@ export async function listPrintJobs(workId: number): Promise<PrintJob[]> {
   return db.query<PrintJob>('SELECT * FROM print_jobs WHERE work_id = ? ORDER BY id DESC', [workId])
 }
 
+export interface RecentJob extends PrintJob {
+  work_name: string
+}
+export async function recentJobs(limit = 6): Promise<RecentJob[]> {
+  return db.query<RecentJob>(
+    `SELECT p.*, COALESCE(w.name, '#' || p.work_id) AS work_name
+     FROM print_jobs p LEFT JOIN works w ON w.id = p.work_id
+     ORDER BY p.id DESC LIMIT ?`,
+    [limit],
+  )
+}
+
 // ---- filaments 读写 ----
 export interface Filament {
   id: number
@@ -201,6 +213,13 @@ export async function createVideo(input: Partial<Video>): Promise<number> {
     ],
   )
   return Number(res.lastInsertRowid)
+}
+
+export async function updateVideo(id: number, patch: Partial<Video>): Promise<void> {
+  const keys = Object.keys(patch).filter((k) => k in ({} as Video))
+  if (keys.length === 0) return
+  const setClause = keys.map((k) => `${k} = ?`).join(', ')
+  await db.run(`UPDATE videos SET ${setClause} WHERE id = ?`, [...keys.map((k) => (patch as any)[k]), id])
 }
 
 export async function deleteVideo(id: number): Promise<void> {
