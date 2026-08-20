@@ -1,7 +1,7 @@
 import { app, BrowserWindow, ipcMain, dialog, shell } from 'electron'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
-import { applySchema } from './schema'
+import { applySchema, recomputeOverdue } from './schema'
 import { fetchVideoStats } from './videoFetch'
 import type Database from 'better-sqlite3'
 
@@ -93,14 +93,43 @@ ipcMain.handle('app:open-data-folder', () => {
   return dir
 })
 
-// 视频链接抓取：B站(WBI) / YouTube(官方 API)
-ipcMain.handle('video:fetchStats', async (_e, url: string, youtubeKey?: string) => {
-  return await fetchVideoStats(url, youtubeKey)
+// 视频链接抓取：仅哔哩哔哩
+ipcMain.handle('video:fetchStats', async (_e, url: string) => {
+  return await fetchVideoStats(url)
 })
+
+// 全量重算逾期 + 每日自动抓取视频（启动执行一次，随后每 24h 一次）
+async function dailyRefresh(): Promise<void> {
+  if (!db) return
+  try {
+    recomputeOverdue(db)
+    const today = new Date().toISOString().slice(0, 10)
+    const rows = db
+      .prepare(`SELECT id, url, last_fetched, published_at FROM videos WHERE url IS NOT NULL`)
+      .all() as Array<{ id: number; url: string; last_fetched: string | null; published_at: string | null }>
+    for (const v of rows) {
+      if (v.last_fetched && v.last_fetched.slice(0, 10) === today) continue
+      try {
+        const s = await fetchVideoStats(v.url)
+        db.prepare(
+          `UPDATE videos SET views=?, likes=?, comments=?, published_at=?, last_fetched=datetime('now') WHERE id=?`,
+        ).run(s.views, s.likes, s.comments, s.published_at || v.published_at, v.id)
+      } catch {
+        // 单条失败跳过（下架 / 限流）
+      }
+    }
+  } catch (err) {
+    // 自动任务失败不应中断应用（如离线 / B 站限流），仅记录
+    console.warn('[dailyRefresh] 失败:', String(err))
+  }
+}
 
 app.whenReady().then(async () => {
   await initDb()
   createWindow()
+  await dailyRefresh()
+  // 每日自动抓取：24h 周期，避免阻塞启动
+  setInterval(dailyRefresh, 24 * 60 * 60 * 1000)
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })

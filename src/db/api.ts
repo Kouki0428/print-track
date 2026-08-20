@@ -13,12 +13,22 @@ export const db = {
 }
 
 // ---- 类型 ----
+// 项目大类：3D 打印 / 3D 建模 / 独立单机游戏
+export type WorkType = 'print' | 'model' | 'game'
+
+export const WORK_TYPE_LABELS: Record<WorkType, string> = {
+  print: '3D 打印',
+  model: '3D 建模',
+  game: '单机游戏',
+}
+
 // 状态语义：筹划中(planning) → 设计中(designing) → 制作中(making) → 完成(done)
-//           逾期(overdue) 为基于排期的时间衍生态；失败(failed) 为终态
+//           逾期(overdue) 由排期结束日自动判定（非终态会被覆盖）；失败(failed) 为终态
 export type WorkStatus = 'planning' | 'designing' | 'making' | 'done' | 'overdue' | 'failed'
 
 export interface Work {
   id: number
+  type: WorkType
   name: string
   parent_id: number | null
   thumbnail: string | null
@@ -49,16 +59,20 @@ export const STATUS_LABELS: Record<WorkStatus, string> = {
 export const STATUS_ORDER: WorkStatus[] = ['planning', 'designing', 'making', 'done', 'overdue', 'failed']
 
 // ---- works 读写 ----
-export async function listWorks(): Promise<Work[]> {
+export async function listWorks(type?: WorkType | 'all'): Promise<Work[]> {
+  if (type && type !== 'all') {
+    return db.query<Work>('SELECT * FROM works WHERE type = ? ORDER BY updated_at DESC', [type])
+  }
   return db.query<Work>('SELECT * FROM works ORDER BY updated_at DESC')
 }
 
 export async function createWork(input: Partial<Work>): Promise<number> {
   const res = await db.run(
-    `INSERT INTO works (name, parent_id, thumbnail, source_path, design_app, category, tags,
+    `INSERT INTO works (type, name, parent_id, thumbnail, source_path, design_app, category, tags,
        material_color, material_weight, print_hours, status, for_sale, sale_price)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [
+      input.type ?? 'print',
       input.name ?? '未命名作品',
       input.parent_id ?? null,
       input.thumbnail ?? null,
@@ -85,6 +99,20 @@ export async function updateWork(id: number, patch: Partial<Work>): Promise<void
     `UPDATE works SET ${setClause}, updated_at = datetime('now') WHERE id = ?`,
     [...keys.map((k) => (patch as any)[k]), id],
   )
+}
+
+// 重算逾期态（基于排期结束日，由主进程 applySchema 启动时已执行一次；此处供手动刷新）
+export async function recomputeOverdue(): Promise<void> {
+  await db.run(`
+    UPDATE works
+    SET status = 'overdue'
+    WHERE status NOT IN ('done', 'failed', 'overdue')
+      AND id IN (
+        SELECT work_id FROM schedule
+        WHERE planned_end IS NOT NULL
+          AND date(planned_end) < date('now')
+      )
+  `)
 }
 
 export async function deleteWork(id: number): Promise<void> {
@@ -184,7 +212,7 @@ export async function deleteFilament(id: number): Promise<void> {
   await db.run('DELETE FROM filaments WHERE id = ?', [id])
 }
 
-// ---- videos 读写 ----
+// ---- videos 读写（仅支持哔哩哔哩，每日自动抓取）----
 export interface Video {
   id: number
   work_id: number
@@ -194,6 +222,7 @@ export interface Video {
   views: number | null
   likes: number | null
   comments: number | null
+  last_fetched: string | null
 }
 
 export async function listVideos(): Promise<Video[]> {
@@ -206,16 +235,17 @@ export async function listVideosByWork(workId: number): Promise<Video[]> {
 
 export async function createVideo(input: Partial<Video>): Promise<number> {
   const res = await db.run(
-    `INSERT INTO videos (work_id, platform, url, published_at, views, likes, comments)
-     VALUES (?,?,?,?,?,?,?)`,
+    `INSERT INTO videos (work_id, platform, url, published_at, views, likes, comments, last_fetched)
+     VALUES (?,?,?,?,?,?,?,?)`,
     [
       input.work_id,
-      input.platform ?? null,
+      'bilibili',
       input.url ?? null,
       input.published_at ?? null,
       input.views ?? 0,
       input.likes ?? 0,
       input.comments ?? 0,
+      input.last_fetched ?? null,
     ],
   )
   return Number(res.lastInsertRowid)
@@ -232,7 +262,7 @@ export async function deleteVideo(id: number): Promise<void> {
   await db.run('DELETE FROM videos WHERE id = ?', [id])
 }
 
-// 视频链接抓取（经主进程 video:fetchStats IPC）
+// 视频链接抓取（仅哔哩哔哩，经主进程 video:fetchStats IPC）
 export interface FetchedVideoStats {
   platform: string
   views: number
@@ -241,11 +271,39 @@ export interface FetchedVideoStats {
   title?: string
   published_at?: string
 }
-export async function fetchVideoStats(
-  url: string,
-  youtubeKey?: string,
-): Promise<FetchedVideoStats> {
-  return (window as any).video.fetchStats(url, youtubeKey) as Promise<FetchedVideoStats>
+
+export async function fetchVideoStats(url: string): Promise<FetchedVideoStats> {
+  return (window as any).video.fetchStats(url) as Promise<FetchedVideoStats>
+}
+
+/**
+ * 每日自动抓取：抓取所有「今天尚未抓取过」且带链接的视频，写回数据并落 last_fetched。
+ * 由主进程在启动 / 每日定时触发，也提供手动入口。
+ */
+export async function refreshAllVideos(): Promise<number> {
+  const today = new Date().toISOString().slice(0, 10)
+  const all = await listVideos()
+  let refreshed = 0
+  for (const v of all) {
+    if (!v.url) continue
+    if (v.last_fetched && v.last_fetched.slice(0, 10) === today) continue
+    try {
+      const s = await fetchVideoStats(v.url)
+      await updateVideo(v.id, {
+        platform: 'bilibili',
+        views: s.views,
+        likes: s.likes,
+        comments: s.comments,
+        published_at: s.published_at || v.published_at,
+        url: v.url,
+        last_fetched: new Date().toISOString(),
+      })
+      refreshed++
+    } catch {
+      // 单条失败不影响其余（如视频下架 / 网络抖动），仅跳过
+    }
+  }
+  return refreshed
 }
 
 // ---- schedule 读写 ----

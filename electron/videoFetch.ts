@@ -1,6 +1,5 @@
-// 视频链接抓取：在 Electron 主进程侧直接请求平台公开 API
-// - B 站：x/web-interface/view（需 WBI 签名）
-// - YouTube：官方 Data API v3（需用户提供 API Key）
+// 视频链接抓取：仅支持哔哩哔哩（x/web-interface/view + 标准 WBI 签名）
+// 不再支持 YouTube（需求改为仅 B 站，且每日自动抓取）
 import http from 'node:http'
 import https from 'node:https'
 import { URL } from 'node:url'
@@ -99,40 +98,14 @@ async function fetchBilibili(bvid: string): Promise<FetchedVideoStats> {
   }
 }
 
-// ---------- YouTube 官方 API ----------
-async function fetchYouTube(videoId: string, apiKey: string): Promise<FetchedVideoStats> {
-  const url = `https://www.googleapis.com/youtube/v3/videos?part=statistics,snippet&id=${encodeURIComponent(
-    videoId,
-  )}&key=${encodeURIComponent(apiKey)}`
-  const data = await getJson(url)
-  if (!data.items || data.items.length === 0) {
-    throw new Error('YouTube 未返回该视频（检查视频 ID 或 API Key 是否有效）')
-  }
-  const s = data.items[0].statistics
-  const sn = data.items[0].snippet
-  return {
-    platform: 'youtube',
-    views: Number(s.viewCount || 0),
-    likes: Number(s.likeCount || 0),
-    comments: Number(s.commentCount || 0),
-    title: sn.title,
-    published_at: (sn.publishedAt || '').slice(0, 10),
-  }
-}
-
-// ---------- 平台识别 ----------
-export function detectPlatform(url: string): { platform: string; id: string } | null {
+// ---------- 平台识别（仅哔哩哔哩）----------
+export function detectBilibili(url: string): string | null {
   const bili = url.match(/(?:bilibili\.com\/video\/|b23\.tv\/)(BV[0-9A-Za-z]+)/i)
-  if (bili) return { platform: 'bilibili', id: bili[1] }
-  const yt = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([0-9A-Za-z_-]{6,})/i)
-  if (yt) return { platform: 'youtube', id: yt[1] }
-  return null
+  return bili ? bili[1] : null
 }
 
-export async function fetchVideoStats(url: string, youtubeKey?: string): Promise<FetchedVideoStats> {
-  const det = detectPlatform(url)
-  if (!det) throw new Error('仅支持 B站(BV 号) 或 YouTube(视频 ID) 链接')
-  if (det.platform === 'bilibili') return fetchBilibili(det.id)
-  if (!youtubeKey) throw new Error('抓取 YouTube 需在「视频统计」页填写 API Key')
-  return fetchYouTube(det.id, youtubeKey)
+export async function fetchVideoStats(url: string): Promise<FetchedVideoStats> {
+  const id = detectBilibili(url)
+  if (!id) throw new Error('仅支持哔哩哔哩视频链接（含 BV 号，如 https://www.bilibili.com/video/BVxxxx）')
+  return fetchBilibili(id)
 }

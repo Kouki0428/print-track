@@ -2,10 +2,13 @@
 import { RouterLink, RouterView, useRoute } from 'vue-router'
 import { onMounted, computed } from 'vue'
 import { useWorksStore } from '@/stores/works'
+import { useUiStore } from '@/stores/ui'
+import { WORK_TYPE_LABELS, type WorkType } from '@/db/api'
 import { theme, toggleTheme } from '@/theme'
 
 const route = useRoute()
 const works = useWorksStore()
+const ui = useUiStore()
 onMounted(() => works.fetchAll())
 
 const isDark = computed(() => theme.value === 'dark')
@@ -15,10 +18,11 @@ const nav = [
   { to: '/library', label: '作品库', icon: 'layers' },
   { to: '/board', label: '进度板', icon: 'kanban' },
   { to: '/timeline', label: '时间线', icon: 'calendar' },
-  { to: '/filaments', label: '耗材', icon: 'spool' },
   { to: '/videos', label: '视频统计', icon: 'play' },
   { to: '/settings', label: '设置', icon: 'gear' },
 ]
+
+const typeOptions: (WorkType | 'all')[] = ['all', 'print', 'model', 'game']
 
 // Lucide 风格描边图标（currentColor）
 const icons: Record<string, string> = {
@@ -26,12 +30,21 @@ const icons: Record<string, string> = {
   layers: '<path d="M12 3 3 8l9 5 9-5-9-5Z"/><path d="m3 13 9 5 9-5"/><path d="m3 18 9 5 9-5"/>',
   kanban: '<rect x="3" y="4" width="5" height="16" rx="1.5"/><rect x="10" y="4" width="5" height="10" rx="1.5"/><rect x="17" y="4" width="4" height="13" rx="1.5"/>',
   calendar: '<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/>',
-  spool: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/>',
   play: '<path d="m6 4 14 8-14 8V4Z"/>',
   gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.9 1.2V21a2 2 0 1 1-4 0v-.1A1.7 1.7 0 0 0 7 19.4a1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.7 1.7 0 0 0 2.6 14H2.5a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 4.6 7a1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.7 1.7 0 0 0 9 2.6V2.5a2 2 0 1 1 4 0v.1A1.7 1.7 0 0 0 17 4.6a1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1A1.7 1.7 0 0 0 21.4 10h.1a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/>',
 }
 function iconSvg(name: string): string {
   return `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${icons[name] || ''}</svg>`
+}
+// 类型小图标（用于段控按钮）
+const typeIcon: Record<WorkType | 'all', string> = {
+  all: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
+  print: '<path d="M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M6 14h12v7H6z"/>',
+  model: '<path d="M12 2 3 7v10l9 5 9-5V7l-9-5Z"/><path d="M3 7l9 5 9-5M12 12v10"/>',
+  game: '<rect x="2" y="6" width="20" height="12" rx="4"/><path d="M7 12h2M8 11v2M16 12h.01M18 14h.01"/>',
+}
+function typeSvg(t: WorkType | 'all'): string {
+  return `<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${typeIcon[t]}</svg>`
 }
 </script>
 
@@ -42,6 +55,22 @@ function iconSvg(name: string): string {
         <span class="logo">⬢</span>
         <span class="brand-name">PrintTrack</span>
       </div>
+
+      <!-- 项目类型统一切换 -->
+      <div class="type-switch">
+        <div class="type-switch-title">项目管理</div>
+        <button
+          v-for="t in typeOptions"
+          :key="t"
+          class="type-btn"
+          :class="{ on: ui.typeFilter === t }"
+          @click="ui.setTypeFilter(t)"
+        >
+          <span v-html="typeSvg(t)"></span>
+          <span>{{ t === 'all' ? '全部项目' : WORK_TYPE_LABELS[t] }}</span>
+        </button>
+      </div>
+
       <nav class="nav">
         <RouterLink
           v-for="item in nav"
@@ -84,7 +113,7 @@ function iconSvg(name: string): string {
   display: flex;
   flex-direction: column;
 }
-.brand { display: flex; align-items: center; gap: 9px; padding: 6px 10px 20px; }
+.brand { display: flex; align-items: center; gap: 9px; padding: 6px 10px 14px; }
 .logo {
   font-size: 20px;
   color: #fff;
@@ -95,6 +124,20 @@ function iconSvg(name: string): string {
   box-shadow: var(--shadow-sm);
 }
 .brand-name { font-weight: 800; font-size: 17px; letter-spacing: -0.3px; }
+
+.type-switch { padding: 6px 4px 14px; border-bottom: 1px solid var(--line); margin-bottom: 12px; }
+.type-switch-title { font-size: 11px; color: var(--muted); letter-spacing: 0.4px; text-transform: uppercase; padding: 0 8px 8px; }
+.type-btn {
+  display: flex; align-items: center; gap: 9px; width: 100%;
+  padding: 7px 10px; border: 1px solid transparent; border-radius: 9px;
+  background: transparent; color: var(--text-2); font-size: 13px; font-weight: 500;
+  cursor: pointer; transition: var(--transition); text-align: left;
+}
+.type-btn:hover { background: var(--hover); color: var(--text); }
+.type-btn.on { background: var(--accent-weak); color: var(--accent); font-weight: 600; border-color: transparent; }
+.type-btn.on svg { color: var(--accent); }
+.type-btn svg { opacity: 0.9; }
+
 .nav { display: flex; flex-direction: column; gap: 2px; flex: 1; }
 .nav-item {
   display: flex;

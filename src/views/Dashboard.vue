@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useWorksStore } from '@/stores/works'
-import { recentJobs, type RecentJob, type WorkStatus } from '@/db/api'
+import { useUiStore } from '@/stores/ui'
+import { WORK_TYPE_LABELS, recentJobs, type RecentJob, type WorkStatus } from '@/db/api'
 import StatusBadge from '@/components/StatusBadge.vue'
 
 const works = useWorksStore()
+const ui = useUiStore()
 const recent = ref<RecentJob[]>([])
 
 onMounted(async () => {
@@ -12,7 +14,20 @@ onMounted(async () => {
   recent.value = await recentJobs(6)
 })
 
-const total = computed(() => works.totalCount)
+// 仅统计当前类型过滤下的作品
+const scoped = computed(() =>
+  works.works.filter((w) => ui.typeFilter === 'all' || w.type === ui.typeFilter),
+)
+const total = computed(() => scoped.value.length)
+
+// 按类型过滤后的状态分布
+const byStatusScoped = computed(() => {
+  const map: Record<WorkStatus, typeof scoped.value> = {
+    planning: [], designing: [], making: [], done: [], overdue: [], failed: [],
+  }
+  for (const w of scoped.value) map[w.status].push(w)
+  return map
+})
 
 const statusOrder: WorkStatus[] = ['planning', 'designing', 'making', 'done', 'overdue', 'failed']
 const colorVar: Record<WorkStatus, string> = {
@@ -26,13 +41,13 @@ const colorVar: Record<WorkStatus, string> = {
 const distribution = computed(() =>
   statusOrder.map((s) => ({
     status: s,
-    count: works.byStatus[s].length,
-    pct: total.value ? (works.byStatus[s].length / total.value) * 100 : 0,
+    count: byStatusScoped.value[s].length,
+    pct: total.value ? (byStatusScoped.value[s].length / total.value) * 100 : 0,
   })),
 )
 
 const recentWorks = computed(() =>
-  [...works.works].sort((a, b) => b.updated_at.localeCompare(a.updated_at)).slice(0, 5),
+  [...scoped.value].sort((a, b) => b.updated_at.localeCompare(a.updated_at)).slice(0, 5),
 )
 
 function shortDate(d: string): string {
@@ -46,26 +61,30 @@ function shortDate(d: string): string {
     <div class="page-head">
       <div>
         <h1 class="page-title">仪表盘</h1>
-        <p class="subtitle">本地数据总览 · 共 {{ total }} 件作品</p>
+        <p class="subtitle">
+          本地数据总览
+          <template v-if="ui.typeFilter !== 'all'"> · {{ WORK_TYPE_LABELS[ui.typeFilter] }}项目</template>
+          · 共 {{ total }} 件
+        </p>
       </div>
     </div>
 
     <div class="stat-grid">
       <div class="stat">
         <div class="stat-value">{{ total }}</div>
-        <div class="stat-label">作品总数</div>
+        <div class="stat-label">项目总数</div>
       </div>
       <div class="stat">
-        <div class="stat-value">{{ works.byStatus.making.length }}</div>
+        <div class="stat-value">{{ byStatusScoped.making.length }}</div>
         <div class="stat-label">制作中</div>
       </div>
       <div class="stat">
-        <div class="stat-value">{{ works.byStatus.done.length }}</div>
+        <div class="stat-value">{{ byStatusScoped.done.length }}</div>
         <div class="stat-label">已完成</div>
       </div>
-      <div class="stat accent">
-        <div class="stat-value">¥{{ works.estimatedRevenue.toFixed(0) }}</div>
-        <div class="stat-label">预估收益（标记售卖）</div>
+      <div class="stat" :class="{ accent: byStatusScoped.overdue.length === 0 }">
+        <div class="stat-value" :style="byStatusScoped.overdue.length ? 'color:var(--red)' : ''">{{ byStatusScoped.overdue.length }}</div>
+        <div class="stat-label">逾期</div>
       </div>
     </div>
 
@@ -107,18 +126,18 @@ function shortDate(d: string): string {
     </div>
 
     <div class="card">
-      <h2 class="section-title">最近更新作品</h2>
+      <h2 class="section-title">最近更新项目</h2>
       <div v-if="recentWorks.length" class="rw-list">
         <div v-for="w in recentWorks" :key="w.id" class="rw">
-          <div class="rw-thumb">{{ w.name.slice(0, 1) }}</div>
+          <div class="rw-thumb" :style="w.material_color ? { background: w.material_color, color: '#fff' } : {}">{{ w.name.slice(0, 1) }}</div>
           <div class="rw-info">
             <div class="rw-name">{{ w.name }}</div>
-            <div class="muted" style="font-size:12px">{{ shortDate(w.updated_at) }} 更新</div>
+            <div class="muted" style="font-size:12px">{{ shortDate(w.updated_at) }} 更新 · {{ WORK_TYPE_LABELS[w.type] }}</div>
           </div>
           <StatusBadge :status="w.status" />
         </div>
       </div>
-      <p v-else class="muted" style="font-size:13px">还没有作品，去「作品库」新建吧。</p>
+      <p v-else class="muted" style="font-size:13px">还没有项目，去「作品库」新建吧。</p>
     </div>
   </div>
 </template>
