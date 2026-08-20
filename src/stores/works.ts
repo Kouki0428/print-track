@@ -39,10 +39,11 @@ export const useWorksStore = defineStore('works', () => {
 
   const byStatus = computed(() => {
     const map: Record<WorkStatus, Work[]> = {
+      planning: [],
       designing: [],
-      slicing: [],
-      printing: [],
+      making: [],
       done: [],
+      overdue: [],
       failed: [],
     }
     for (const w of works.value) map[w.status].push(w)

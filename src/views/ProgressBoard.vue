@@ -12,7 +12,17 @@ import {
 import StatusBadge from '@/components/StatusBadge.vue'
 
 const works = useWorksStore()
-const columns: WorkStatus[] = ['designing', 'slicing', 'printing', 'done', 'failed']
+const columns: WorkStatus[] = ['planning', 'designing', 'making', 'done', 'overdue', 'failed']
+
+// 列头色条（与状态语义色对应）
+const colColor: Record<WorkStatus, string> = {
+  planning: 'var(--purple)',
+  designing: 'var(--blue)',
+  making: 'var(--orange)',
+  done: 'var(--green)',
+  overdue: 'var(--red)',
+  failed: 'var(--gray)',
+}
 
 const selectedId = ref<number | null>(null)
 const jobs = ref<PrintJob[]>([])
@@ -65,7 +75,7 @@ async function addJob() {
     </div>
 
     <div class="board">
-      <div v-for="col in columns" :key="col" class="col">
+      <div v-for="col in columns" :key="col" class="col" :style="{ borderTopColor: colColor[col] }">
         <div class="col-head">
           <StatusBadge :status="col" />
           <span class="count">{{ works.byStatus[col].length }}</span>
@@ -145,9 +155,10 @@ async function addJob() {
 </template>
 
 <style scoped>
-.board { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; }
-@media (max-width: 1000px) { .board { grid-template-columns: repeat(2, 1fr); } }
-.col { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px; min-height: 240px; transition: var(--transition); }
+.board { display: grid; grid-template-columns: repeat(6, minmax(150px, 1fr)); gap: 14px; }
+@media (max-width: 1200px) { .board { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 720px) { .board { grid-template-columns: repeat(2, 1fr); } }
+.col { background: var(--panel); border: 1px solid var(--line); border-top: 3px solid var(--line); border-radius: var(--radius); padding: 12px; min-height: 240px; transition: var(--transition); }
 .col-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
 .count {
   font-size: 12px; color: var(--muted); background: var(--bg-soft);

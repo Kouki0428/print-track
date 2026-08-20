@@ -14,13 +14,14 @@ onMounted(async () => {
 
 const total = computed(() => works.totalCount)
 
-const statusOrder: WorkStatus[] = ['designing', 'slicing', 'printing', 'done', 'failed']
+const statusOrder: WorkStatus[] = ['planning', 'designing', 'making', 'done', 'overdue', 'failed']
 const colorVar: Record<WorkStatus, string> = {
+  planning: 'var(--purple)',
   designing: 'var(--blue)',
-  slicing: 'var(--purple)',
-  printing: 'var(--orange)',
+  making: 'var(--orange)',
   done: 'var(--green)',
-  failed: 'var(--red)',
+  overdue: 'var(--red)',
+  failed: 'var(--gray)',
 }
 const distribution = computed(() =>
   statusOrder.map((s) => ({
@@ -55,8 +56,8 @@ function shortDate(d: string): string {
         <div class="stat-label">作品总数</div>
       </div>
       <div class="stat">
-        <div class="stat-value">{{ works.byStatus.printing.length }}</div>
-        <div class="stat-label">进行中（打印中）</div>
+        <div class="stat-value">{{ works.byStatus.making.length }}</div>
+        <div class="stat-label">制作中</div>
       </div>
       <div class="stat">
         <div class="stat-value">{{ works.byStatus.done.length }}</div>

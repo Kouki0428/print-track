@@ -2,6 +2,7 @@ import { app, BrowserWindow, ipcMain, dialog, shell } from 'electron'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import { applySchema } from './schema'
+import { fetchVideoStats } from './videoFetch'
 import type Database from 'better-sqlite3'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -90,6 +91,11 @@ ipcMain.handle('app:open-data-folder', () => {
   const dir = app.getPath('userData')
   shell.openPath(dir)
   return dir
+})
+
+// 视频链接抓取：B站(WBI) / YouTube(官方 API)
+ipcMain.handle('video:fetchStats', async (_e, url: string, youtubeKey?: string) => {
+  return await fetchVideoStats(url, youtubeKey)
 })
 
 app.whenReady().then(async () => {

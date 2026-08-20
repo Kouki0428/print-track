@@ -11,7 +11,7 @@ const works = useWorksStore()
 const keyword = ref('')
 const filter = ref<WorkStatus | 'all'>('all')
 
-const filters: (WorkStatus | 'all')[] = ['all', 'designing', 'slicing', 'printing', 'done', 'failed']
+const filters: (WorkStatus | 'all')[] = ['all', 'planning', 'designing', 'making', 'done', 'overdue', 'failed']
 
 const filtered = computed(() => {
   const k = keyword.value.trim().toLowerCase()
@@ -29,7 +29,7 @@ const modalOpen = ref(false)
 const editingId = ref<number | null>(null)
 const form = ref({
   name: '',
-  status: 'designing' as WorkStatus,
+  status: 'planning' as WorkStatus,
   design_app: '',
   source_path: '',
   material_color: '',
@@ -43,7 +43,7 @@ const form = ref({
 function openCreate() {
   editingId.value = null
   form.value = {
-    name: '', status: 'designing', design_app: '', source_path: '', material_color: '',
+    name: '', status: 'planning', design_app: '', source_path: '', material_color: '',
     material_weight: '', print_hours: '', for_sale: false, sale_price: '', parent_id: '',
   }
   modalOpen.value = true
@@ -115,7 +115,7 @@ async function remove(w: Work) {
     </div>
 
     <div v-if="filtered.length" class="grid">
-      <div v-for="w in filtered" :key="w.id" class="card">
+      <div v-for="w in filtered" :key="w.id" class="card" :class="'s-' + w.status">
         <div class="thumb">
           <span>{{ w.name.slice(0, 1) }}</span>
           <span v-if="w.material_color" class="color-dot" :title="w.material_color"></span>
@@ -240,4 +240,13 @@ async function remove(w: Work) {
 .mini.danger:hover { background: var(--red-bg); }
 
 .field.check { flex-direction: row; align-items: center; gap: 8px; }
+
+/* 状态色条 + 入场动画 */
+.grid > .card { animation: rise 0.32s ease both; }
+.card.s-planning { border-top: 3px solid var(--purple); }
+.card.s-designing { border-top: 3px solid var(--blue); }
+.card.s-making { border-top: 3px solid var(--orange); }
+.card.s-done { border-top: 3px solid var(--green); }
+.card.s-overdue { border-top: 3px solid var(--red); }
+.card.s-failed { border-top: 3px solid var(--gray); }
 </style>

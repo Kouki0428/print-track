@@ -6,6 +6,7 @@ import {
   createVideo,
   updateVideo,
   deleteVideo,
+  fetchVideoStats,
   type Work,
   type Video,
 } from '@/db/api'
@@ -18,6 +19,11 @@ const showModal = ref(false)
 const editingId = ref<number | null>(null)
 const platformFilter = ref<string>('all')
 const form = ref({ work_id: '', platform: 'B站', url: '', published_at: '', views: '', likes: '', comments: '' })
+
+// YouTube Data API Key（存本地，不进数据库）
+const ytKey = ref(localStorage.getItem('printtrack_yt_key') || '')
+const fetchingId = ref<number | null>(null)
+const fetchingForm = ref(false)
 
 async function reload() {
   works.value = await listWorks()
@@ -53,6 +59,52 @@ const byWork = computed(() => {
 
 function workName(id: number): string {
   return works.value.find((w) => w.id === id)?.name || `#${id}`
+}
+
+function saveYtKey() {
+  const v = ytKey.value.trim()
+  if (v) localStorage.setItem('printtrack_yt_key', v)
+  else localStorage.removeItem('printtrack_yt_key')
+}
+
+// 抓取单条视频数据并写回
+async function refreshOne(v: Video) {
+  if (!v.url) return
+  fetchingId.value = v.id
+  try {
+    const s = await fetchVideoStats(v.url, ytKey.value.trim())
+    await updateVideo(v.id, {
+      platform: s.platform,
+      views: s.views,
+      likes: s.likes,
+      comments: s.comments,
+      published_at: s.published_at || v.published_at,
+      url: v.url,
+    })
+    await reload()
+  } catch (e: any) {
+    alert('抓取失败：' + (e?.message || e))
+  } finally {
+    fetchingId.value = null
+  }
+}
+
+// 弹窗内：粘贴链接自动识别平台并填充播放/点赞/评论
+async function fetchIntoForm() {
+  if (!form.value.url.trim()) return
+  fetchingForm.value = true
+  try {
+    const s = await fetchVideoStats(form.value.url.trim(), ytKey.value.trim())
+    form.value.platform = s.platform === 'bilibili' ? 'B站' : s.platform === 'youtube' ? 'YouTube' : s.platform
+    form.value.views = String(s.views)
+    form.value.likes = String(s.likes)
+    form.value.comments = String(s.comments)
+    if (s.published_at) form.value.published_at = s.published_at
+  } catch (e: any) {
+    alert('抓取失败：' + (e?.message || e))
+  } finally {
+    fetchingForm.value = false
+  }
 }
 
 function openCreate() {
@@ -99,8 +151,19 @@ async function remove(v: Video) {
 <template>
   <div>
     <div class="page-head">
-      <h1 class="page-title">视频统计</h1>
+      <div>
+        <h1 class="page-title">视频统计</h1>
+        <p class="subtitle">粘贴 B站 / YouTube 链接，一键抓取播放·点赞·评论</p>
+      </div>
       <button class="btn" @click="openCreate">+ 新增视频</button>
+    </div>
+
+    <div class="yt-bar card">
+      <label class="field yt-field">
+        <span>YouTube API Key（可选，抓取 YouTube 时需要）</span>
+        <input v-model="ytKey" class="input" type="password" placeholder="AIza..." @change="saveYtKey" />
+      </label>
+      <span class="muted yt-hint">B站无需 Key，直接抓取；YouTube 需在 Google Cloud 申请免费的 Data API v3 Key。</span>
     </div>
 
     <div class="stat-grid">
@@ -142,6 +205,9 @@ async function remove(v: Video) {
             <td>{{ v.likes ?? 0 }}</td>
             <td>{{ v.comments ?? 0 }}</td>
             <td class="ops">
+              <button class="mini" :disabled="fetchingId === v.id" @click="refreshOne(v)">
+                {{ fetchingId === v.id ? '抓取中…' : '↻ 抓取' }}
+              </button>
               <a v-if="v.url" :href="v.url" target="_blank" class="mini">打开</a>
               <button class="mini" @click="openEdit(v)">编辑</button>
               <button class="mini danger" @click="remove(v)">删除</button>
@@ -164,8 +230,13 @@ async function remove(v: Video) {
         <label class="field">平台
           <input v-model="form.platform" class="input" placeholder="B站 / 抖音 / YouTube" />
         </label>
-        <label class="field">链接
-          <input v-model="form.url" class="input" placeholder="https://" />
+        <label class="field url-field">链接
+          <div class="url-row">
+            <input v-model="form.url" class="input" placeholder="https://…" />
+            <button class="btn sm" :disabled="fetchingForm || !form.url" @click="fetchIntoForm">
+              {{ fetchingForm ? '抓取中…' : '抓取并填充' }}
+            </button>
+          </div>
         </label>
         <label class="field">发布日期
           <input v-model="form.published_at" class="input" type="date" />
@@ -189,6 +260,10 @@ async function remove(v: Video) {
 </template>
 
 <style scoped>
+.subtitle { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
+.yt-bar { display: flex; align-items: flex-end; gap: 14px; margin-bottom: 16px; flex-wrap: wrap; }
+.yt-field { min-width: 280px; flex: 1; color: var(--muted); font-size: 12px; }
+.yt-hint { font-size: 12px; max-width: 360px; }
 .mt { margin-top: 16px; }
 .toolbar { margin-bottom: 12px; }
 .chips { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -206,6 +281,9 @@ async function remove(v: Video) {
 .ops { display: flex; gap: 6px; align-items: center; white-space: nowrap; }
 .mini { border: 1px solid var(--line); background: var(--panel-2); border-radius: 7px; padding: 4px 9px; font-size: 12px; cursor: pointer; transition: var(--transition); }
 .mini:hover { background: var(--hover); }
+.mini:disabled { opacity: 0.6; cursor: default; }
 .mini.danger { color: var(--red); border-color: var(--red-bg); }
 .mini.danger:hover { background: var(--red-bg); }
+.url-row { display: flex; gap: 8px; }
+.url-row .input { flex: 1; }
 </style>

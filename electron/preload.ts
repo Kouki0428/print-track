@@ -10,3 +10,8 @@ contextBridge.exposeInMainWorld('db', {
 contextBridge.exposeInMainWorld('app', {
   openDataFolder: () => ipcRenderer.invoke('app:open-data-folder'),
 })
+
+// 视频链接抓取（B站 / YouTube）
+contextBridge.exposeInMainWorld('video', {
+  fetchStats: (url: string, youtubeKey?: string) => ipcRenderer.invoke('video:fetchStats', url, youtubeKey),
+})

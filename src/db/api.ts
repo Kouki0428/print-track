@@ -13,7 +13,9 @@ export const db = {
 }
 
 // ---- 类型 ----
-export type WorkStatus = 'designing' | 'slicing' | 'printing' | 'done' | 'failed'
+// 状态语义：筹划中(planning) → 设计中(designing) → 制作中(making) → 完成(done)
+//           逾期(overdue) 为基于排期的时间衍生态；失败(failed) 为终态
+export type WorkStatus = 'planning' | 'designing' | 'making' | 'done' | 'overdue' | 'failed'
 
 export interface Work {
   id: number
@@ -35,12 +37,16 @@ export interface Work {
 }
 
 export const STATUS_LABELS: Record<WorkStatus, string> = {
+  planning: '筹划中',
   designing: '设计中',
-  slicing: '切片中',
-  printing: '打印中',
+  making: '制作中',
   done: '完成',
+  overdue: '逾期',
   failed: '失败',
 }
+
+// 看板列顺序（筹划 → 设计 → 制作 → 完成 → 逾期 → 失败）
+export const STATUS_ORDER: WorkStatus[] = ['planning', 'designing', 'making', 'done', 'overdue', 'failed']
 
 // ---- works 读写 ----
 export async function listWorks(): Promise<Work[]> {
@@ -63,7 +69,7 @@ export async function createWork(input: Partial<Work>): Promise<number> {
       input.material_color ?? null,
       input.material_weight ?? null,
       input.print_hours ?? null,
-      input.status ?? 'designing',
+      input.status ?? 'planning',
       input.for_sale ?? 0,
       input.sale_price ?? null,
     ],
@@ -224,6 +230,22 @@ export async function updateVideo(id: number, patch: Partial<Video>): Promise<vo
 
 export async function deleteVideo(id: number): Promise<void> {
   await db.run('DELETE FROM videos WHERE id = ?', [id])
+}
+
+// 视频链接抓取（经主进程 video:fetchStats IPC）
+export interface FetchedVideoStats {
+  platform: string
+  views: number
+  likes: number
+  comments: number
+  title?: string
+  published_at?: string
+}
+export async function fetchVideoStats(
+  url: string,
+  youtubeKey?: string,
+): Promise<FetchedVideoStats> {
+  return (window as any).video.fetchStats(url, youtubeKey) as Promise<FetchedVideoStats>
 }
 
 // ---- schedule 读写 ----

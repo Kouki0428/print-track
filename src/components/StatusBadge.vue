@@ -4,13 +4,14 @@ import { STATUS_LABELS, type WorkStatus } from '@/db/api'
 
 const props = defineProps<{ status: WorkStatus }>()
 
-// 状态 -> 语义色（与 style.css 的 --blue/--purple/--orange/--green/--red 对应）
+// 状态 -> 语义色（与 style.css 的令牌对应）
 const colorMap: Record<WorkStatus, string> = {
+  planning: 'purple',
   designing: 'blue',
-  slicing: 'purple',
-  printing: 'orange',
+  making: 'orange',
   done: 'green',
-  failed: 'red',
+  overdue: 'red',
+  failed: 'gray',
 }
 
 const label = computed(() => STATUS_LABELS[props.status])
@@ -30,4 +31,5 @@ const cls = computed(() => `badge--${colorMap[props.status]}`)
 .badge--orange { --c: var(--orange); --c-bg: var(--orange-bg); }
 .badge--green { --c: var(--green); --c-bg: var(--green-bg); }
 .badge--red { --c: var(--red); --c-bg: var(--red-bg); }
+.badge--gray { --c: var(--gray); --c-bg: var(--gray-bg); }
 </style>

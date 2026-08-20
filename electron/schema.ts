@@ -19,7 +19,7 @@ export function applySchema(db: Database.Database): void {
       material_color TEXT,
       material_weight REAL,
       print_hours   REAL,
-      status        TEXT    NOT NULL DEFAULT 'designing',
+      status        TEXT    NOT NULL DEFAULT 'planning',
       for_sale      INTEGER NOT NULL DEFAULT 0,
       sale_price    REAL,
       created_at    TEXT    NOT NULL DEFAULT (datetime('now')),
@@ -86,6 +86,10 @@ export function applySchema(db: Database.Database): void {
   if (!hasColumn(db, 'print_jobs', 'filament_id')) {
     db.exec(`ALTER TABLE print_jobs ADD COLUMN filament_id INTEGER REFERENCES filaments(id)`)
   }
+
+  // 状态语义升级：旧的 slicing/printing 合并为 making（筹划中/设计中/完成/失败 保持不变）
+  // 旧库可能残留这两个值，统一重映射，避免看板/筛选出现未知状态
+  db.exec(`UPDATE works SET status = 'making' WHERE status IN ('slicing', 'printing')`)
 }
 
 /** 探测列是否存在（better-sqlite3 不支持 IF NOT EXISTS 语义，统一先探测） */
