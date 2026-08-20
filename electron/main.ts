@@ -51,7 +51,10 @@ function createWindow(): void {
       )
     } else {
       win.loadURL(url)
-      win.webContents.openDevTools({ mode: 'detach' })
+      // 默认不弹 DevTools；需要调试时设环境变量 PRINTTRACK_DEVTOOLS=1 才会以独立窗口打开
+      if (process.env.PRINTTRACK_DEVTOOLS === '1') {
+        win.webContents.openDevTools({ mode: 'detach' })
+      }
     }
   } else {
     win.loadFile(path.join(__dirname, '../dist/index.html'))
