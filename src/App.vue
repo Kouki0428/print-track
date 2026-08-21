@@ -3,7 +3,7 @@ import { RouterLink, RouterView, useRoute } from 'vue-router'
 import { onMounted, computed, ref } from 'vue'
 import { useWorksStore } from '@/stores/works'
 import { useUiStore } from '@/stores/ui'
-import { KNOWN_TYPES, typeLabel } from '@/db/api'
+import { typeLabel } from '@/db/api'
 import { theme, toggleTheme } from '@/theme'
 
 const route = useRoute()
@@ -21,21 +21,11 @@ const nav = [
   { to: '/videos', label: '视频统计', icon: 'play' },
 ]
 
-const typeOptions = computed<string[]>(() => {
-  const known = ['all', ...KNOWN_TYPES] as string[]
-  const custom = Array.from(new Set(works.works.map((w) => w.type))).filter(
-    (t) => !KNOWN_TYPES.includes(t as any),
-  )
-  return [...known, ...custom]
-})
+// 侧边栏类型段控：固定 4 项；自定义类型统一归入「其它」，不单独建按钮
+const typeOptions = ['all', 'print', 'model', 'other']
 
 function typeName(t: string): string {
   return t === 'all' ? '全部项目' : typeLabel(t)
-}
-
-function addCustomType() {
-  const name = window.prompt('输入自定义项目类型名称：')
-  if (name && name.trim()) ui.setTypeFilter(name.trim())
 }
 
 // Lucide 风格描边图标（currentColor）
@@ -94,7 +84,7 @@ function onSpinEnd() {
         <span class="brand-name">PrintTrack</span>
       </div>
 
-      <!-- 项目类型统一切换（含自定义类型） -->
+      <!-- 项目类型统一切换（自定义类型归入「其它」） -->
       <div class="type-switch">
         <div class="type-switch-title">项目管理</div>
         <button
@@ -106,10 +96,6 @@ function onSpinEnd() {
         >
           <span v-html="typeSvg(t)"></span>
           <span>{{ typeName(t) }}</span>
-        </button>
-        <button class="type-btn custom" @click="addCustomType">
-          <span v-html="typeSvg('other')"></span>
-          <span>+ 自定义类型</span>
         </button>
       </div>
 
@@ -197,8 +183,6 @@ function onSpinEnd() {
 .type-btn.on { background: var(--accent-weak); color: var(--accent); font-weight: 600; border-color: transparent; }
 .type-btn.on svg { color: var(--accent); }
 .type-btn svg { opacity: 0.9; }
-.type-btn.custom { color: var(--muted); font-style: italic; }
-.type-btn.custom:hover { color: var(--accent); }
 
 .nav { display: flex; flex-direction: column; gap: 2px; flex: 1; }
 .nav-item {

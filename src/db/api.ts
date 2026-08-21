@@ -83,10 +83,15 @@ function mapWork(r: any): Work {
 
 export async function listWorks(type?: WorkType | 'all'): Promise<Work[]> {
   let rows: any[]
-  if (type && type !== 'all') {
-    rows = await db.query<any>('SELECT * FROM works WHERE type = ? ORDER BY updated_at DESC', [type])
-  } else {
+  if (!type || type === 'all') {
     rows = await db.query<any>('SELECT * FROM works ORDER BY updated_at DESC')
+  } else if (type === 'other') {
+    // 「其它」= 所有非内置类型（含用户自定义类型），统一归入此类管理
+    rows = await db.query<any>(
+      "SELECT * FROM works WHERE type NOT IN ('print','model') ORDER BY updated_at DESC",
+    )
+  } else {
+    rows = await db.query<any>('SELECT * FROM works WHERE type = ? ORDER BY updated_at DESC', [type])
   }
   return rows.map(mapWork)
 }

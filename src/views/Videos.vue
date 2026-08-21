@@ -26,6 +26,11 @@ const fetchingId = ref<number | null>(null)
 const fetchingForm = ref(false)
 const refreshingAll = ref(false)
 const lastRefresh = ref<string>('')
+// 可见的抓取状态（成功/失败原因），避免自动抓取静默吞错、手动抓取只弹一次 alert
+const fetchStatus = ref<{ kind: 'ok' | 'err' | 'idle'; text: string }>({ kind: 'idle', text: '' })
+function setStatus(kind: 'ok' | 'err' | 'idle', text = '') {
+  fetchStatus.value = { kind, text }
+}
 
 async function reload() {
   works.value = await listWorks()
@@ -81,9 +86,10 @@ async function refreshOne(v: Video) {
       url: v.url,
       last_fetched: new Date().toISOString(),
     })
+    setStatus('ok', `已更新《${s.title || v.url}》：播放 ${s.views} · 点赞 ${s.likes} · 评论 ${s.comments}`)
     await reload()
   } catch (e: any) {
-    alert('抓取失败：' + (e?.message || e))
+    setStatus('err', '抓取失败：' + (e?.message || e))
   } finally {
     fetchingId.value = null
   }
@@ -99,8 +105,9 @@ async function fetchIntoForm() {
     form.value.likes = String(s.likes)
     form.value.comments = String(s.comments)
     if (s.published_at) form.value.published_at = s.published_at
+    setStatus('ok', `识别成功《${s.title || ''}》：播放 ${s.views} · 点赞 ${s.likes} · 评论 ${s.comments}`)
   } catch (e: any) {
-    alert('抓取失败：' + (e?.message || e))
+    setStatus('err', '抓取失败：' + (e?.message || e))
   } finally {
     fetchingForm.value = false
   }
@@ -112,9 +119,10 @@ async function refreshAll() {
   try {
     const n = await refreshAllVideos()
     lastRefresh.value = `${new Date().toLocaleString('zh-CN')}（更新 ${n} 条）`
+    setStatus(n > 0 ? 'ok' : 'ok', n > 0 ? `已刷新 ${n} 条视频数据` : '没有需要更新的视频（或链接全部抓取失败，见下方状态）')
     await reload()
   } catch (e: any) {
-    alert('刷新失败：' + (e?.message || e))
+    setStatus('err', '刷新失败：' + (e?.message || e))
   } finally {
     refreshingAll.value = false
   }
@@ -181,6 +189,12 @@ async function remove(v: Video) {
       </button>
     </div>
     <div v-if="lastRefresh" class="last-refresh">上次手动刷新：{{ lastRefresh }}</div>
+    <div v-if="fetchStatus.kind !== 'idle'" class="fetch-status" :class="fetchStatus.kind">
+      <span class="fs-dot"></span>
+      <span>{{ fetchStatus.text }}</span>
+      <button class="fs-close" @click="setStatus('idle')">×</button>
+    </div>
+    <p class="hint">提示：应用启动与每 24 小时会自动抓取；若自动抓取无数据，请点「↻ 立即抓取全部」或单条「↻ 抓取」，下方状态条会显示真实失败原因（如 B 站返回 -412 拦截，多为网络/地区限制）。</p>
 
     <div class="stat-grid">
       <div class="stat"><div class="stat-value">{{ stats.views }}</div><div class="stat-label">总播放</div></div>
@@ -273,6 +287,13 @@ async function remove(v: Video) {
 .auto-title { font-weight: 700; font-size: 14px; }
 .auto-sub { font-size: 12px; color: var(--muted); margin-top: 3px; max-width: 420px; }
 .last-refresh { font-size: 12px; color: var(--muted); margin: 0 0 16px; }
+.fetch-status { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 10px; font-size: 13px; margin-bottom: 14px; border: 1px solid; }
+.fetch-status.ok { background: var(--green-bg); border-color: var(--green); color: var(--green); }
+.fetch-status.err { background: var(--red-bg); border-color: var(--red); color: var(--red); }
+.fs-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+.fs-close { margin-left: auto; background: transparent; border: none; color: inherit; font-size: 16px; cursor: pointer; line-height: 1; opacity: 0.7; }
+.fs-close:hover { opacity: 1; }
+.hint { font-size: 12px; color: var(--muted); line-height: 1.6; margin: 0 0 16px; }
 .mt { margin-top: 16px; }
 .tag { font-size: 12px; color: var(--text-2); background: var(--gray-bg); padding: 2px 8px; border-radius: 6px; }
 .fetched { color: var(--green); }
