@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { listWorks, listVideos, listSchedules, db, WORK_TYPE_LABELS, type WorkType } from '@/db/api'
+import { listWorks, listVideos, listSchedules, db, typeLabel, KNOWN_TYPES } from '@/db/api'
 import { theme, setTheme, type Theme } from '@/theme'
 
 const counts = ref({ works: 0, prints: 0, videos: 0, schedules: 0, byType: {} as Record<string, number> })
@@ -11,7 +11,7 @@ async function reload() {
   const s = await listSchedules()
   const p = await db.get<{ c: number }>('SELECT COUNT(*) AS c FROM print_jobs')
   const byType: Record<string, number> = {}
-  for (const t of ['print', 'model', 'game'] as WorkType[]) {
+  for (const t of KNOWN_TYPES as readonly string[]) {
     byType[t] = w.filter((x) => x.type === t).length
   }
   counts.value = {
@@ -60,7 +60,7 @@ function openFolder() {
       </div>
       <div class="type-breakdown">
         <span class="tb-label">类型分布</span>
-        <span class="tb-chip" v-for="(val, key) in counts.byType" :key="key">{{ WORK_TYPE_LABELS[key as WorkType] }} · {{ val }}</span>
+        <span class="tb-chip" v-for="(val, key) in counts.byType" :key="key">{{ typeLabel(key) }} · {{ val }}</span>
       </div>
     </div>
 

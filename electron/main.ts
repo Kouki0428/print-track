@@ -114,8 +114,9 @@ async function dailyRefresh(): Promise<void> {
         db.prepare(
           `UPDATE videos SET views=?, likes=?, comments=?, published_at=?, last_fetched=datetime('now') WHERE id=?`,
         ).run(s.views, s.likes, s.comments, s.published_at || v.published_at, v.id)
-      } catch {
-        // 单条失败跳过（下架 / 限流）
+      } catch (e) {
+        // 单条失败跳过（下架 / 限流 / 网络抖动），仅记录便于排查
+        console.warn(`[dailyRefresh] 视频 ${v.id} 抓取失败:`, String(e))
       }
     }
   } catch (err) {

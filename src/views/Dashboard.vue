@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useWorksStore } from '@/stores/works'
 import { useUiStore } from '@/stores/ui'
-import { WORK_TYPE_LABELS, recentJobs, type RecentJob, type WorkStatus } from '@/db/api'
+import { typeLabel, recentJobs, type RecentJob, type WorkStatus } from '@/db/api'
 import StatusBadge from '@/components/StatusBadge.vue'
 
 const works = useWorksStore()
@@ -63,7 +63,7 @@ function shortDate(d: string): string {
         <h1 class="page-title">仪表盘</h1>
         <p class="subtitle">
           本地数据总览
-          <template v-if="ui.typeFilter !== 'all'"> · {{ WORK_TYPE_LABELS[ui.typeFilter] }}项目</template>
+          <template v-if="ui.typeFilter !== 'all'"> · {{ typeLabel(ui.typeFilter) }}项目</template>
           · 共 {{ total }} 件
         </p>
       </div>
@@ -129,10 +129,10 @@ function shortDate(d: string): string {
       <h2 class="section-title">最近更新项目</h2>
       <div v-if="recentWorks.length" class="rw-list">
         <div v-for="w in recentWorks" :key="w.id" class="rw">
-          <div class="rw-thumb" :style="w.material_color ? { background: w.material_color, color: '#fff' } : {}">{{ w.name.slice(0, 1) }}</div>
+          <div class="rw-thumb" :style="w.material_colors && w.material_colors.length ? { background: w.material_colors[0], color: '#fff' } : {}">{{ w.name.slice(0, 1) }}</div>
           <div class="rw-info">
             <div class="rw-name">{{ w.name }}</div>
-            <div class="muted" style="font-size:12px">{{ shortDate(w.updated_at) }} 更新 · {{ WORK_TYPE_LABELS[w.type] }}</div>
+            <div class="muted" style="font-size:12px">{{ shortDate(w.updated_at) }} 更新 · {{ typeLabel(w.type) }}</div>
           </div>
           <StatusBadge :status="w.status" />
         </div>

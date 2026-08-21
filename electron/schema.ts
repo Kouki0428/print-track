@@ -1,6 +1,6 @@
 import type Database from 'better-sqlite3'
 
-export const SCHEMA_VERSION = 2
+export const SCHEMA_VERSION = 3
 
 export function applySchema(db: Database.Database): void {
   db.pragma('journal_mode = WAL')
@@ -18,6 +18,7 @@ export function applySchema(db: Database.Database): void {
       category      TEXT,
       tags          TEXT,
       material_color TEXT,
+      material_colors TEXT,
       material_weight REAL,
       print_hours   REAL,
       status        TEXT    NOT NULL DEFAULT 'planning',
@@ -92,10 +93,20 @@ export function applySchema(db: Database.Database): void {
   if (!hasColumn(db, 'works', 'type')) {
     db.exec(`ALTER TABLE works ADD COLUMN type TEXT NOT NULL DEFAULT 'print'`)
   }
+  // 类型改名：单机游戏(game) → 其它(other)
+  db.exec(`UPDATE works SET type = 'other' WHERE type = 'game'`)
   // 旧库 videos 没有 last_fetched 列时补上（每日自动抓取时间戳）
   if (!hasColumn(db, 'videos', 'last_fetched')) {
     db.exec(`ALTER TABLE videos ADD COLUMN last_fetched TEXT`)
   }
+  // 旧库 works 没有 material_colors 列时补上；并把旧单值 material_color 迁移为 JSON 数组
+  if (!hasColumn(db, 'works', 'material_colors')) {
+    db.exec(`ALTER TABLE works ADD COLUMN material_colors TEXT`)
+  }
+  db.exec(
+    `UPDATE works SET material_colors = json_array(material_color)
+     WHERE material_colors IS NULL AND material_color IS NOT NULL AND material_color <> ''`,
+  )
   // print_jobs 增加 filament_id 关联（已存在旧库兼容；better-sqlite3 需用 PRAGMA 探测后 ALTER）
   if (!hasColumn(db, 'print_jobs', 'filament_id')) {
     db.exec(`ALTER TABLE print_jobs ADD COLUMN filament_id INTEGER REFERENCES filaments(id)`)
@@ -114,6 +125,16 @@ function runMigrations(db: Database.Database, fromVersion: number): void {
     if (!hasColumn(db, 'videos', 'last_fetched')) {
       db.exec(`ALTER TABLE videos ADD COLUMN last_fetched TEXT`)
     }
+  }
+  if (fromVersion < 3) {
+    db.exec(`UPDATE works SET type = 'other' WHERE type = 'game'`)
+    if (!hasColumn(db, 'works', 'material_colors')) {
+      db.exec(`ALTER TABLE works ADD COLUMN material_colors TEXT`)
+    }
+    db.exec(
+      `UPDATE works SET material_colors = json_array(material_color)
+       WHERE material_colors IS NULL AND material_color IS NOT NULL AND material_color <> ''`,
+    )
   }
 }
 

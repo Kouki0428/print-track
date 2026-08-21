@@ -2,7 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useWorksStore } from '@/stores/works'
 import { useUiStore } from '@/stores/ui'
-import { createPrintJob, listPrintJobs, type PrintJob, type WorkStatus } from '@/db/api'
+import { createPrintJob, listPrintJobs, typeLabel, type PrintJob, type Work, type WorkStatus } from '@/db/api'
 import StatusBadge from '@/components/StatusBadge.vue'
 
 const works = useWorksStore()
@@ -37,6 +37,10 @@ const byStatusVisible = computed(() => {
 const countOf = (s: WorkStatus) => byStatusVisible.value[s].length
 
 const selected = computed(() => visibleWorks.value.find((w) => w.id === selectedId.value) || null)
+
+function firstColor(w: Work): string | undefined {
+  return w.material_colors?.[0]
+}
 
 onMounted(async () => {
   await works.fetchAll()
@@ -75,10 +79,10 @@ async function addJob() {
     <div class="page-head">
       <div>
         <h1 class="page-title">进度板</h1>
-        <p class="subtitle">
-          点击作品卡片查看 / 新增打印记录
-          <template v-if="ui.typeFilter !== 'all'"> · 仅显示{{ ui.typeFilter === 'print' ? '3D 打印' : ui.typeFilter === 'model' ? '3D 建模' : '单机游戏' }}项目</template>
-        </p>
+          <p class="subtitle">
+            点击作品卡片查看 / 新增打印记录
+            <template v-if="ui.typeFilter !== 'all'"> · 仅显示{{ typeLabel(ui.typeFilter) }}项目</template>
+          </p>
       </div>
     </div>
 
@@ -96,7 +100,7 @@ async function addJob() {
           @click="selectWork(w.id)"
         >
           <span class="item-name">{{ w.name }}</span>
-          <span v-if="w.material_color" class="color-chip" :style="{ background: w.material_color }" :title="w.material_color"></span>
+          <span v-if="firstColor(w)" class="color-chip" :style="{ background: firstColor(w) }" :title="firstColor(w)"></span>
           <span v-if="w.for_sale" class="sale-dot" title="售卖中">¥</span>
         </div>
         <div v-if="countOf(col) === 0" class="item empty">暂无</div>
@@ -109,9 +113,15 @@ async function addJob() {
         <StatusBadge :status="selected.status" />
       </div>
 
-      <div v-if="selected.material_color" class="material-line">
-        <span class="material-dot" :style="{ background: selected.material_color }"></span>
-        关联线材：<b>{{ selected.material_color.toUpperCase() }}</b>
+      <div v-if="selected.material_colors && selected.material_colors.length" class="material-line">
+        关联线材：
+        <span
+          v-for="c in selected.material_colors"
+          :key="c"
+          class="material-dot"
+          :style="{ background: c }"
+          :title="c"
+        ></span>
         <span v-if="selected.material_weight"> · {{ selected.material_weight }}g</span>
       </div>
 

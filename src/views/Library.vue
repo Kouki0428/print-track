@@ -4,15 +4,15 @@ import { useWorksStore } from '@/stores/works'
 import { useUiStore } from '@/stores/ui'
 import {
   STATUS_LABELS,
-  WORK_TYPE_LABELS,
+  KNOWN_TYPES,
+  typeLabel,
   type Work,
   type WorkStatus,
-  type WorkType,
 } from '@/db/api'
 import StatusBadge from '@/components/StatusBadge.vue'
 import BaseModal from '@/components/BaseModal.vue'
 import EmptyState from '@/components/EmptyState.vue'
-import ColorPicker from '@/components/ColorPicker.vue'
+import ColorPalette from '@/components/ColorPalette.vue'
 
 const works = useWorksStore()
 const ui = useUiStore()
@@ -35,28 +35,52 @@ const filtered = computed(() => {
 
 const parentName = (id: number | null) => works.works.find((w) => w.id === id)?.name || '—'
 
+function workColors(w: Work): string[] {
+  return w.material_colors || []
+}
+
 // ---- 新建表单 ----
 const createOpen = ref(false)
 const cform = ref({
-  type: 'print' as WorkType,
+  type: 'print' as string,
   name: '',
   status: 'planning' as WorkStatus,
   design_app: '',
   source_path: '',
-  material_color: '' as string | null,
+  material_colors: [] as string[],
   material_weight: '',
   print_hours: '',
   for_sale: false,
   sale_price: '',
   parent_id: '' as string,
 })
+const showPaletteCreate = ref(false)
+
+const createTypeOptions = computed<{ value: string; label: string }[]>(() => {
+  const opts: { value: string; label: string }[] = KNOWN_TYPES.map((t) => ({ value: t, label: typeLabel(t) }))
+  if (cform.value.type && !KNOWN_TYPES.includes(cform.value.type as any)) {
+    opts.push({ value: cform.value.type, label: cform.value.type })
+  }
+  opts.push({ value: '__custom__', label: '＋ 自定义类型' })
+  return opts
+})
+function onTypeChange(e: Event) {
+  const v = (e.target as HTMLSelectElement).value
+  if (v === '__custom__') {
+    const name = window.prompt('输入自定义项目类型名称：')
+    cform.value.type = name && name.trim() ? name.trim() : cform.value.type || 'print'
+  } else {
+    cform.value.type = v
+  }
+}
 function openCreate() {
   cform.value = {
-    type: ui.typeFilter === 'all' ? 'print' : ui.typeFilter,
+    type: ui.typeFilter === 'all' || !KNOWN_TYPES.includes(ui.typeFilter as any) ? ui.typeFilter === 'all' ? 'print' : ui.typeFilter : 'print',
     name: '', status: 'planning', design_app: '', source_path: '',
-    material_color: null, material_weight: '', print_hours: '',
+    material_colors: [], material_weight: '', print_hours: '',
     for_sale: false, sale_price: '', parent_id: '',
   }
+  showPaletteCreate.value = false
   createOpen.value = true
 }
 async function submitCreate() {
@@ -68,7 +92,7 @@ async function submitCreate() {
     status: f.status,
     design_app: f.design_app.trim() || null,
     source_path: f.source_path.trim() || null,
-    material_color: f.material_color,
+    material_colors: f.material_colors,
     material_weight: f.material_weight ? Number(f.material_weight) : null,
     print_hours: f.print_hours ? Number(f.print_hours) : null,
     for_sale: f.for_sale ? 1 : 0,
@@ -77,17 +101,33 @@ async function submitCreate() {
   })
   createOpen.value = false
 }
+function addColorCreate(hex: string) {
+  if (!cform.value.material_colors.includes(hex)) cform.value.material_colors.push(hex)
+}
+function removeColorCreate(hex: string) {
+  cform.value.material_colors = cform.value.material_colors.filter((c) => c !== hex)
+}
 
 // ---- 详情抽屉 ----
 const detailId = ref<number | null>(null)
 const detail = computed(() => works.works.find((w) => w.id === detailId.value) || null)
+const showPalette = ref(false)
 
 function openDetail(w: Work) {
   detailId.value = w.id
+  showPalette.value = false
 }
 async function patchDetail(p: Partial<Work>) {
   if (detailId.value == null) return
   await works.patch(detailId.value, p)
+}
+function addColor(hex: string) {
+  const cur = detail.value?.material_colors || []
+  if (!cur.includes(hex)) patchDetail({ material_colors: [...cur, hex] })
+}
+function removeColor(hex: string) {
+  const cur = detail.value?.material_colors || []
+  patchDetail({ material_colors: cur.filter((c) => c !== hex) })
 }
 async function remove(w: Work) {
   if (!window.confirm(`确定删除「${w.name}」？该操作不可撤销。`)) return
@@ -104,7 +144,7 @@ async function remove(w: Work) {
         <p class="subtitle">
           统一管理
           <template v-if="ui.typeFilter === 'all'">全部项目</template>
-          <template v-else>{{ WORK_TYPE_LABELS[ui.typeFilter] }}项目</template>
+          <template v-else>{{ typeLabel(ui.typeFilter) }}项目</template>
           · 点击卡片查看详情
         </p>
       </div>
@@ -137,11 +177,17 @@ async function remove(w: Work) {
         <div class="thumb">
           <span>{{ w.name.slice(0, 1) }}</span>
           <span
-            v-if="w.type === 'print' && w.material_color"
-            class="color-dot"
-            :style="{ background: w.material_color }"
-            :title="w.material_color"
-          ></span>
+            v-if="w.type === 'print' && workColors(w).length"
+            class="color-dots"
+          >
+            <span
+              v-for="c in workColors(w).slice(0, 3)"
+              :key="c"
+              class="color-dot"
+              :style="{ background: c }"
+              :title="c"
+            ></span>
+          </span>
         </div>
         <div class="meta">
           <div class="name-row">
@@ -149,7 +195,7 @@ async function remove(w: Work) {
             <StatusBadge :status="w.status" />
           </div>
           <div class="tags">
-            <span class="tag type">{{ WORK_TYPE_LABELS[w.type] }}</span>
+            <span class="tag type">{{ typeLabel(w.type) }}</span>
             <span v-if="w.design_app" class="tag">{{ w.design_app }}</span>
             <span v-if="w.type === 'print' && w.material_weight" class="tag">{{ w.material_weight }}g</span>
             <span v-if="w.type === 'print' && w.print_hours" class="tag">{{ w.print_hours }}h</span>
@@ -173,10 +219,8 @@ async function remove(w: Work) {
     <BaseModal :open="createOpen" title="新建项目" width="600px" @close="createOpen = false">
       <div class="form-grid">
         <label class="field">类型
-          <select v-model="cform.type" class="select">
-            <option value="print">3D 打印</option>
-            <option value="model">3D 建模</option>
-            <option value="game">单机游戏</option>
+          <select :value="cform.type" class="select" @change="onTypeChange">
+            <option v-for="t in createTypeOptions" :key="t.value" :value="t.value">{{ t.label }}</option>
           </select>
         </label>
         <label class="field">名称
@@ -188,7 +232,7 @@ async function remove(w: Work) {
           </select>
         </label>
         <label class="field">软件 / 引擎
-          <input v-model="cform.design_app" class="input" :placeholder="cform.type === 'game' ? 'Unity / Godot' : 'Blender / Fusion360'" />
+          <input v-model="cform.design_app" class="input" :placeholder="cform.type === 'print' ? 'Blender / Fusion360' : '软件 / 引擎名称'" />
         </label>
         <label class="field">父项目（子项目归属）
           <select v-model="cform.parent_id" class="select">
@@ -200,6 +244,17 @@ async function remove(w: Work) {
           <input v-model="cform.source_path" class="input" placeholder="STL / 工程文件路径" />
         </label>
         <template v-if="cform.type === 'print'">
+          <label class="field">耗材关联（项目内调色盘）
+            <div class="color-chips">
+              <span v-for="c in cform.material_colors" :key="c" class="color-chip" :style="{ background: c }">
+                <button class="x" @click="removeColorCreate(c)" title="移除">×</button>
+              </span>
+              <button class="add-color" @click="showPaletteCreate = !showPaletteCreate" title="添加关联颜色">＋</button>
+            </div>
+            <div v-if="showPaletteCreate" class="palette-pop">
+              <ColorPalette :current="cform.material_colors" @pick="addColorCreate" />
+            </div>
+          </label>
           <label class="field">耗材重量 (g)
             <input v-model="cform.material_weight" class="input" placeholder="120" inputmode="decimal" />
           </label>
@@ -230,7 +285,7 @@ async function remove(w: Work) {
     >
       <div class="detail-head">
         <StatusBadge :status="detail.status" />
-        <span class="type-tag">{{ WORK_TYPE_LABELS[detail.type] }}</span>
+        <span class="type-tag">{{ typeLabel(detail.type) }}</span>
       </div>
 
       <!-- 通用字段 -->
@@ -254,13 +309,21 @@ async function remove(w: Work) {
         </label>
       </div>
 
-      <!-- 3D 打印专属：调色盘关联耗材颜色 + 重量/用量 -->
+      <!-- 3D 打印专属：调色盘关联耗材颜色（多色）+ 重量/用量 -->
       <div v-if="detail.type === 'print'" class="inline-panel">
         <div class="panel-title">耗材关联（项目内调色盘）</div>
         <div class="panel-body">
           <div class="field">
-            <span class="field-label">线材颜色</span>
-            <ColorPicker :model-value="detail.material_color" @update:model-value="patchDetail({ material_color: $event })" />
+            <span class="field-label">关联线材颜色</span>
+            <div class="color-chips">
+              <span v-for="c in (detail.material_colors || [])" :key="c" class="color-chip" :style="{ background: c }">
+                <button class="x" @click="removeColor(c)" title="移除">×</button>
+              </span>
+              <button class="add-color" @click="showPalette = !showPalette" title="添加关联颜色">＋</button>
+            </div>
+            <div v-if="showPalette" class="palette-pop">
+              <ColorPalette :current="detail.material_colors || []" @pick="addColor" />
+            </div>
           </div>
           <div class="mini-fields">
             <label class="field">耗材重量 (g)
@@ -269,10 +332,6 @@ async function remove(w: Work) {
             <label class="field">打印时长 (h)
               <input :value="detail.print_hours ?? ''" class="input" inputmode="decimal" placeholder="6.5" @change="patchDetail({ print_hours: Number(($event.target as HTMLInputElement).value) || null })" />
             </label>
-            <div v-if="detail.material_color" class="color-preview">
-              <span class="preview-dot" :style="{ background: detail.material_color }"></span>
-              <span class="preview-hex">{{ detail.material_color.toUpperCase() }}</span>
-            </div>
           </div>
         </div>
       </div>
@@ -290,15 +349,15 @@ async function remove(w: Work) {
         </div>
       </div>
 
-      <!-- 单机游戏专属 -->
-      <div v-else-if="detail.type === 'game'" class="inline-panel">
-        <div class="panel-title">游戏制作信息</div>
+      <!-- 其它 / 自定义类型：通用信息面板 -->
+      <div v-else class="inline-panel">
+        <div class="panel-title">项目信息</div>
         <div class="panel-body">
-          <label class="field">平台
-            <input :value="detail.category || ''" class="input" placeholder="PC / Steam / 主机" @change="patchDetail({ category: ($event.target as HTMLInputElement).value || null })" />
+          <label class="field">分类
+            <input :value="detail.category || ''" class="input" placeholder="可选分类" @change="patchDetail({ category: ($event.target as HTMLInputElement).value || null })" />
           </label>
-          <label class="field">版本
-            <input :value="detail.tags || ''" class="input" placeholder="v0.1.0" @change="patchDetail({ tags: ($event.target as HTMLInputElement).value || null })" />
+          <label class="field">标签
+            <input :value="detail.tags || ''" class="input" placeholder="可选标签" @change="patchDetail({ tags: ($event.target as HTMLInputElement).value || null })" />
           </label>
         </div>
       </div>
@@ -343,10 +402,8 @@ async function remove(w: Work) {
   display: flex; align-items: center; justify-content: center;
   font-size: 38px; font-weight: 800; color: var(--accent);
 }
-.color-dot {
-  position: absolute; right: 10px; bottom: 10px; width: 18px; height: 18px;
-  border-radius: 50%; border: 2px solid #fff; box-shadow: var(--shadow-sm);
-}
+.color-dots { position: absolute; right: 10px; bottom: 10px; display: flex; gap: 4px; }
+.color-dot { width: 16px; height: 16px; border-radius: 50%; border: 2px solid #fff; box-shadow: var(--shadow-sm); }
 .name-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .name { font-weight: 700; font-size: 15px; }
 .tags { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -364,8 +421,25 @@ async function remove(w: Work) {
 .panel-body { padding: 14px; display: flex; flex-direction: column; gap: 14px; }
 .mini-fields { display: flex; gap: 14px; align-items: flex-end; flex-wrap: wrap; }
 .mini-fields .field { min-width: 140px; }
-.color-preview { display: flex; align-items: center; gap: 8px; }
-.preview-dot { width: 22px; height: 22px; border-radius: 6px; border: 1px solid var(--line-strong); }
-.preview-hex { font-size: 13px; font-variant-numeric: tabular-nums; color: var(--text-2); }
+
+/* 多色关联 */
+.color-chips { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.color-chip {
+  width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--line-strong);
+  position: relative; display: inline-flex; align-items: center; justify-content: center;
+}
+.color-chip .x {
+  position: absolute; top: -6px; right: -6px; width: 16px; height: 16px; border-radius: 50%;
+  background: var(--red); color: #fff; border: 1px solid #fff; font-size: 11px; line-height: 1;
+  cursor: pointer; display: none; padding: 0;
+}
+.color-chip:hover .x { display: inline-flex; align-items: center; justify-content: center; }
+.add-color {
+  width: 30px; height: 30px; border-radius: 8px; border: 1px dashed var(--line-strong);
+  background: var(--panel); color: var(--text-2); font-size: 16px; cursor: pointer; transition: var(--transition);
+}
+.add-color:hover { border-color: var(--accent); color: var(--accent); }
+.palette-pop { margin-top: 4px; }
+
 .field.check { flex-direction: row; align-items: center; gap: 8px; }
 </style>

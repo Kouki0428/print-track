@@ -13,13 +13,16 @@ export const db = {
 }
 
 // ---- 类型 ----
-// 项目大类：3D 打印 / 3D 建模 / 独立单机游戏
-export type WorkType = 'print' | 'model' | 'game'
-
-export const WORK_TYPE_LABELS: Record<WorkType, string> = {
+// 项目大类为任意字符串：内置 3D 打印 / 3D 建模 / 其它，其余为「自定义类型」（用户手动输入）
+export type WorkType = string
+export const KNOWN_TYPES = ['print', 'model', 'other'] as const
+export const WORK_TYPE_LABELS: Record<string, string> = {
   print: '3D 打印',
   model: '3D 建模',
-  game: '单机游戏',
+  other: '其它',
+}
+export function typeLabel(t: string): string {
+  return WORK_TYPE_LABELS[t] ?? t
 }
 
 // 状态语义：筹划中(planning) → 设计中(designing) → 制作中(making) → 完成(done)
@@ -36,7 +39,7 @@ export interface Work {
   design_app: string | null
   category: string | null
   tags: string | null
-  material_color: string | null
+  material_colors: string[] | null
   material_weight: number | null
   print_hours: number | null
   status: WorkStatus
@@ -59,17 +62,39 @@ export const STATUS_LABELS: Record<WorkStatus, string> = {
 export const STATUS_ORDER: WorkStatus[] = ['planning', 'designing', 'making', 'done', 'overdue', 'failed']
 
 // ---- works 读写 ----
-export async function listWorks(type?: WorkType | 'all'): Promise<Work[]> {
-  if (type && type !== 'all') {
-    return db.query<Work>('SELECT * FROM works WHERE type = ? ORDER BY updated_at DESC', [type])
+// 关联耗材颜色：以 JSON 数组存储（多色），读写边界统一做序列化/解析
+export function parseColors(text: string | null | undefined): string[] | null {
+  if (!text) return null
+  try {
+    const arr = JSON.parse(text)
+    return Array.isArray(arr) ? arr.filter((c) => typeof c === 'string') : null
+  } catch {
+    return null
   }
-  return db.query<Work>('SELECT * FROM works ORDER BY updated_at DESC')
+}
+export function serializeColors(arr?: string[] | null): string | null {
+  if (!arr || !arr.length) return null
+  return JSON.stringify(arr)
+}
+
+function mapWork(r: any): Work {
+  return { ...r, material_colors: parseColors(r.material_colors) }
+}
+
+export async function listWorks(type?: WorkType | 'all'): Promise<Work[]> {
+  let rows: any[]
+  if (type && type !== 'all') {
+    rows = await db.query<any>('SELECT * FROM works WHERE type = ? ORDER BY updated_at DESC', [type])
+  } else {
+    rows = await db.query<any>('SELECT * FROM works ORDER BY updated_at DESC')
+  }
+  return rows.map(mapWork)
 }
 
 export async function createWork(input: Partial<Work>): Promise<number> {
   const res = await db.run(
     `INSERT INTO works (type, name, parent_id, thumbnail, source_path, design_app, category, tags,
-       material_color, material_weight, print_hours, status, for_sale, sale_price)
+       material_colors, material_weight, print_hours, status, for_sale, sale_price)
      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [
       input.type ?? 'print',
@@ -80,7 +105,7 @@ export async function createWork(input: Partial<Work>): Promise<number> {
       input.design_app ?? null,
       input.category ?? null,
       input.tags ?? null,
-      input.material_color ?? null,
+      serializeColors(input.material_colors),
       input.material_weight ?? null,
       input.print_hours ?? null,
       input.status ?? 'planning',
@@ -94,10 +119,13 @@ export async function createWork(input: Partial<Work>): Promise<number> {
 export async function updateWork(id: number, patch: Partial<Work>): Promise<void> {
   const keys = Object.keys(patch).filter((k) => k in ({} as Work))
   if (keys.length === 0) return
+  const params = keys.map((k) =>
+    k === 'material_colors' ? serializeColors(patch.material_colors) : (patch as any)[k],
+  )
   const setClause = keys.map((k) => `${k} = ?`).join(', ')
   await db.run(
     `UPDATE works SET ${setClause}, updated_at = datetime('now') WHERE id = ?`,
-    [...keys.map((k) => (patch as any)[k]), id],
+    [...params, id],
   )
 }
 

@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { RouterLink, RouterView, useRoute } from 'vue-router'
-import { onMounted, computed } from 'vue'
+import { onMounted, computed, ref } from 'vue'
 import { useWorksStore } from '@/stores/works'
 import { useUiStore } from '@/stores/ui'
-import { WORK_TYPE_LABELS, type WorkType } from '@/db/api'
+import { KNOWN_TYPES, typeLabel } from '@/db/api'
 import { theme, toggleTheme } from '@/theme'
 
 const route = useRoute()
@@ -19,10 +19,24 @@ const nav = [
   { to: '/board', label: '进度板', icon: 'kanban' },
   { to: '/timeline', label: '时间线', icon: 'calendar' },
   { to: '/videos', label: '视频统计', icon: 'play' },
-  { to: '/settings', label: '设置', icon: 'gear' },
 ]
 
-const typeOptions: (WorkType | 'all')[] = ['all', 'print', 'model', 'game']
+const typeOptions = computed<string[]>(() => {
+  const known = ['all', ...KNOWN_TYPES] as string[]
+  const custom = Array.from(new Set(works.works.map((w) => w.type))).filter(
+    (t) => !KNOWN_TYPES.includes(t as any),
+  )
+  return [...known, ...custom]
+})
+
+function typeName(t: string): string {
+  return t === 'all' ? '全部项目' : typeLabel(t)
+}
+
+function addCustomType() {
+  const name = window.prompt('输入自定义项目类型名称：')
+  if (name && name.trim()) ui.setTypeFilter(name.trim())
+}
 
 // Lucide 风格描边图标（currentColor）
 const icons: Record<string, string> = {
@@ -31,20 +45,44 @@ const icons: Record<string, string> = {
   kanban: '<rect x="3" y="4" width="5" height="16" rx="1.5"/><rect x="10" y="4" width="5" height="10" rx="1.5"/><rect x="17" y="4" width="4" height="13" rx="1.5"/>',
   calendar: '<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/>',
   play: '<path d="m6 4 14 8-14 8V4Z"/>',
-  gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.9 1.2V21a2 2 0 1 1-4 0v-.1A1.7 1.7 0 0 0 7 19.4a1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.7 1.7 0 0 0 2.6 14H2.5a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 4.6 7a1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.7 1.7 0 0 0 9 2.6V2.5a2 2 0 1 1 4 0v.1A1.7 1.7 0 0 0 17 4.6a1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1A1.7 1.7 0 0 0 21.4 10h.1a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/>',
 }
 function iconSvg(name: string): string {
   return `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${icons[name] || ''}</svg>`
 }
 // 类型小图标（用于段控按钮）
-const typeIcon: Record<WorkType | 'all', string> = {
+const typeIcon: Record<string, string> = {
   all: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
   print: '<path d="M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M6 14h12v7H6z"/>',
   model: '<path d="M12 2 3 7v10l9 5 9-5V7l-9-5Z"/><path d="M3 7l9 5 9-5M12 12v10"/>',
-  game: '<rect x="2" y="6" width="20" height="12" rx="4"/><path d="M7 12h2M8 11v2M16 12h.01M18 14h.01"/>',
+  other: '<circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/>',
 }
-function typeSvg(t: WorkType | 'all'): string {
-  return `<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${typeIcon[t]}</svg>`
+function typeSvg(t: string): string {
+  return `<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${typeIcon[t] || typeIcon.other}</svg>`
+}
+
+// ---- 设置齿轮动画（参考 acgn-records 的 6 齿齿轮 + 旋转动画）----
+// 6 齿齿轮（描边风格）：以 (12,12) 为中心，齿根 r=6.5 / 齿顶 r=9，严格同心
+const gearIcon =
+  'M 17.63 8.75 20.8 10.13 20.8 13.87 17.63 15.25 18.02 18.69 14.78 20.56 12.0 18.5 9.22 20.56 5.98 18.69 6.37 15.25 3.2 13.87 3.2 10.13 6.37 8.75 5.98 5.31 9.22 3.44 12.0 5.5 14.78 3.44 18.02 5.31 Z'
+const isSpinning = ref(false)
+const isPressed = ref(false)
+function press() {
+  isPressed.value = true
+}
+function release() {
+  isPressed.value = false
+}
+function spinGear() {
+  isPressed.value = false
+  isSpinning.value = false
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      isSpinning.value = true
+    })
+  })
+}
+function onSpinEnd() {
+  isSpinning.value = false
 }
 </script>
 
@@ -56,7 +94,7 @@ function typeSvg(t: WorkType | 'all'): string {
         <span class="brand-name">PrintTrack</span>
       </div>
 
-      <!-- 项目类型统一切换 -->
+      <!-- 项目类型统一切换（含自定义类型） -->
       <div class="type-switch">
         <div class="type-switch-title">项目管理</div>
         <button
@@ -67,7 +105,11 @@ function typeSvg(t: WorkType | 'all'): string {
           @click="ui.setTypeFilter(t)"
         >
           <span v-html="typeSvg(t)"></span>
-          <span>{{ t === 'all' ? '全部项目' : WORK_TYPE_LABELS[t] }}</span>
+          <span>{{ typeName(t) }}</span>
+        </button>
+        <button class="type-btn custom" @click="addCustomType">
+          <span v-html="typeSvg('other')"></span>
+          <span>+ 自定义类型</span>
         </button>
       </div>
 
@@ -81,6 +123,24 @@ function typeSvg(t: WorkType | 'all'): string {
         >
           <span class="nav-icon" v-html="iconSvg(item.icon)"></span>
           <span class="nav-label">{{ item.label }}</span>
+        </RouterLink>
+        <!-- 设置入口：6 齿齿轮，点击旋转 -->
+        <RouterLink
+          to="/settings"
+          class="nav-item settings-gear"
+          :class="{ active: route.path.startsWith('/settings'), spinning: isSpinning, pressed: isPressed }"
+          @mousedown="press"
+          @mouseup="release"
+          @mouseleave="release"
+          @click="spinGear"
+        >
+          <span class="nav-icon gear" @animationend="onSpinEnd">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="3" />
+              <path :d="gearIcon" />
+            </svg>
+          </span>
+          <span class="nav-label">设置</span>
         </RouterLink>
       </nav>
       <div class="sidebar-foot">
@@ -137,6 +197,8 @@ function typeSvg(t: WorkType | 'all'): string {
 .type-btn.on { background: var(--accent-weak); color: var(--accent); font-weight: 600; border-color: transparent; }
 .type-btn.on svg { color: var(--accent); }
 .type-btn svg { opacity: 0.9; }
+.type-btn.custom { color: var(--muted); font-style: italic; }
+.type-btn.custom:hover { color: var(--accent); }
 
 .nav { display: flex; flex-direction: column; gap: 2px; flex: 1; }
 .nav-item {
@@ -186,4 +248,16 @@ function typeSvg(t: WorkType | 'all'): string {
 .page-enter-active, .page-leave-active { transition: opacity 0.16s ease, transform 0.16s ease; }
 .page-enter-from { opacity: 0; transform: translateY(6px); }
 .page-leave-to { opacity: 0; transform: translateY(-4px); }
+
+/* 设置齿轮（参考 acgn-records） */
+.gear { width: 18px; height: 18px; flex-shrink: 0; opacity: 0.85; transform-box: fill-box; transform-origin: center; transform: rotate(30deg); transition: transform 0.18s ease; }
+.settings-gear.pressed .gear { transform: rotate(10deg); transition: transform 0.12s ease; }
+.settings-gear.spinning .gear { animation: gearSpin 0.6s linear both; }
+@keyframes gearSpin {
+  0%   { transform: rotate(30deg)  scale(1); }
+  25%  { transform: rotate(120deg) scale(1.03); }
+  55%  { transform: rotate(300deg) scale(1.05); }
+  80%  { transform: rotate(360deg) scale(1.03); }
+  100% { transform: rotate(390deg) scale(1); }
+}
 </style>
