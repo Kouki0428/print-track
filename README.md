@@ -34,7 +34,7 @@ npm run dist       :: 打包为可分发的 exe（electron-builder）
 - 备份：设置 → 「备份数据库」，选择保存位置即可导出 `.db` 文件。
 
 ## 版本管理
-- 远程仓库：`git@github.com:yhq1845769/print-track.git`（SSH 协议）。
+- 远程仓库：`git@github.com:Kouki0428/print-track.git`（SSH 协议）。
 - `.gitignore` 已忽略 `node_modules`、`dist`、`dist-electron`、`*.db` 等。
 - 日常提交：
 ```cmd
