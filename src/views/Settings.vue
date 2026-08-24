@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { listWorks, listVideos, listSchedules, db, typeLabel, KNOWN_TYPES } from '@/db/api'
-import { theme, setTheme, type Theme } from '@/theme'
+import { listWorks, listVideos, listSchedules, db, typeLabel, KNOWN_TYPES, STATUS_LABELS } from '@/db/api'
+import { themePref, setThemePref, type ThemePref } from '@/theme'
+import { useToast } from '@/stores/toast'
 
+const toast = useToast()
 const counts = ref({ works: 0, prints: 0, videos: 0, schedules: 0, byType: {} as Record<string, number> })
+const backingUp = ref(false)
 
 async function reload() {
   const w = await listWorks()
@@ -27,19 +30,79 @@ onMounted(reload)
 function openFolder() {
   ;(window as any).app?.openDataFolder?.()
 }
+
+// 备份数据库文件到用户选择的位置
+async function backupDb() {
+  backingUp.value = true
+  try {
+    const r = await (window as any).app?.backupDatabase?.()
+    if (r?.ok) toast.success(`已备份到：${r.path}`)
+  } catch (e: any) {
+    toast.error('备份失败：' + (e?.message || e))
+  } finally {
+    backingUp.value = false
+  }
+}
+
+// 导出项目清单 CSV（含 BOM，Excel 直接打开中文不乱码）
+const exporting = ref(false)
+function csvCell(v: unknown): string {
+  const s = v == null ? '' : String(v)
+  return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s
+}
+async function exportCsv() {
+  exporting.value = true
+  try {
+    const ws = await listWorks()
+    const header = [
+      '名称', '类型', '状态', '软件', '源文件路径', '耗材颜色',
+      '重量(g)', '打印时长(h)', '售卖', '价格(¥)', '创建时间', '更新时间',
+    ]
+    const rows = ws.map((w) =>
+      [
+        w.name,
+        typeLabel(w.type),
+        STATUS_LABELS[w.status],
+        w.design_app ?? '',
+        w.source_path ?? '',
+        (w.material_colors ?? []).join(' '),
+        w.material_weight ?? '',
+        w.print_hours ?? '',
+        w.for_sale ? '是' : '否',
+        w.sale_price ?? '',
+        (w.created_at || '').slice(0, 19),
+        (w.updated_at || '').slice(0, 19),
+      ]
+        .map(csvCell)
+        .join(','),
+    )
+    const csv = [header.join(','), ...rows].join('\r\n')
+    const r = await (window as any).app?.exportCsv?.(
+      `print-track-项目-${new Date().toISOString().slice(0, 10)}.csv`,
+      csv,
+    )
+    if (r?.ok) toast.success('已导出到：' + r.path)
+  } catch (e: any) {
+    toast.error('导出失败：' + (e?.message || e))
+  } finally {
+    exporting.value = false
+  }
+}
 </script>
 
 <template>
   <div>
     <h1 class="page-title">设置</h1>
 
+    <div class="stagger">
     <div class="card">
       <div class="sec-title">外观</div>
       <div class="row" style="justify-content:space-between">
         <span class="muted">主题</span>
         <div class="seg">
-          <button :class="{ on: theme === 'light' }" @click="setTheme('light' as Theme)">浅色</button>
-          <button :class="{ on: theme === 'dark' }" @click="setTheme('dark' as Theme)">深色</button>
+          <button :class="{ on: themePref === 'light' }" @click="setThemePref('light' as ThemePref)">浅色</button>
+          <button :class="{ on: themePref === 'dark' }" @click="setThemePref('dark' as ThemePref)">深色</button>
+          <button :class="{ on: themePref === 'system' }" @click="setThemePref('system' as ThemePref)">跟随系统</button>
         </div>
       </div>
     </div>
@@ -48,7 +111,11 @@ function openFolder() {
       <div class="sec-title">数据存储</div>
       <p class="line"><span class="k">存储方式</span><span>本地 SQLite（better-sqlite3）</span></p>
       <p class="line"><span class="k">数据库位置</span><span>应用用户数据目录下，自动管理、离线可用</span></p>
-      <button class="btn ghost" style="margin-top:8px" @click="openFolder">打开数据目录</button>
+      <div class="row" style="margin-top:8px">
+        <button class="btn ghost" @click="openFolder">打开数据目录</button>
+        <button class="btn ghost" :disabled="backingUp" @click="backupDb">{{ backingUp ? '备份中…' : '备份数据库' }}</button>
+        <button class="btn ghost" :disabled="exporting" @click="exportCsv">{{ exporting ? '导出中…' : '导出项目 CSV' }}</button>
+      </div>
     </div>
 
     <div class="card">
@@ -82,6 +149,7 @@ function openFolder() {
       <p class="line"><span class="k">应用</span><span>PrintTrack · 3D 打印进度管理与规划</span></p>
       <p class="line"><span class="k">技术栈</span><span>Electron + Vue3 + TypeScript + Vite + Pinia</span></p>
     </div>
+    </div>
   </div>
 </template>
 
@@ -92,13 +160,15 @@ function openFolder() {
 .line { display: flex; gap: 12px; font-size: 14px; margin: 8px 0; }
 .k { color: var(--muted); width: 120px; flex-shrink: 0; }
 .grid { display: flex; gap: 14px; flex-wrap: wrap; }
-.kv { background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 12px 18px; min-width: 90px; text-align: center; }
-.kv b { display: block; font-size: 22px; }
+.kv { background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 12px 18px; min-width: 90px; text-align: center; transition: var(--transition); }
+.kv:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); border-color: var(--accent); }
+.kv b { display: block; font-size: 22px; font-variant-numeric: tabular-nums; }
 .kv span { font-size: 12px; color: var(--muted); }
 .type-breakdown { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
 .tb-label { font-size: 12px; color: var(--muted); }
 .tb-chip { font-size: 12px; color: var(--accent); background: var(--accent-weak); padding: 3px 10px; border-radius: 999px; font-weight: 600; }
 .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; }
-.seg button { border: none; background: var(--panel); color: var(--text-2); padding: 7px 16px; font-size: 13px; cursor: pointer; }
+.seg button { border: none; background: var(--panel); color: var(--text-2); padding: 7px 16px; font-size: 13px; cursor: pointer; transition: var(--transition); }
+.seg button:hover { color: var(--text); background: var(--hover); }
 .seg button.on { background: var(--accent); color: #fff; }
 </style>

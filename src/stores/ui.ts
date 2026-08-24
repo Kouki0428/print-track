@@ -15,11 +15,14 @@ function load(): string {
 export const useUiStore = defineStore('ui', () => {
   const typeFilter = ref<string>(load())
 
+  // 「新建」广播信号：App 层按 N 键时 +1，各列表视图监听后打开自己的新建弹窗
+  const newSignal = ref(0)
+
   function setTypeFilter(t: string) {
     const v = t.trim()
     typeFilter.value = ALLOWED.includes(v) ? v : 'all'
     localStorage.setItem(STORE_KEY, typeFilter.value)
   }
 
-  return { typeFilter, setTypeFilter }
+  return { typeFilter, newSignal, setTypeFilter }
 })

@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain, dialog, shell } from 'electron'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
+import fs from 'node:fs'
 import { applySchema, recomputeOverdue } from './schema'
 import { fetchVideoStats } from './videoFetch'
 import type Database from 'better-sqlite3'
@@ -27,6 +28,16 @@ async function initDb(): Promise<void> {
   }
 }
 
+// 读取用户主题偏好（渲染端切主题时经 IPC 写入），用于窗口创建时设定背景色，避免深色用户闪白
+function readThemePref(): 'light' | 'dark' {
+  try {
+    const p = path.join(app.getPath('userData'), 'ui-pref.json')
+    return JSON.parse(fs.readFileSync(p, 'utf8'))?.theme === 'dark' ? 'dark' : 'light'
+  } catch {
+    return 'light'
+  }
+}
+
 function createWindow(): void {
   const win = new BrowserWindow({
     width: 1280,
@@ -34,7 +45,7 @@ function createWindow(): void {
     minWidth: 980,
     minHeight: 640,
     title: 'PrintTrack · 3D 打印进度管理',
-    backgroundColor: '#f6f7f9',
+    backgroundColor: readThemePref() === 'dark' ? '#14161b' : '#f4f6f9',
     webPreferences: {
       preload: path.join(__dirname, 'preload.mjs'),
       contextIsolation: true,
@@ -64,6 +75,12 @@ function createWindow(): void {
   win.webContents.on('did-fail-load', (_e, errorCode, errorDescription) => {
     dialog.showErrorBox('页面加载失败', `code=${errorCode} ${errorDescription}`)
   })
+
+  // target="_blank" / window.open 一律交给系统默认浏览器，不在应用内开子窗口
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:\/\//i.test(url)) shell.openExternal(url)
+    return { action: 'deny' }
+  })
 }
 
 // ---- IPC：数据库代理（所有 SQL 经由主进程执行，渲染端不直连 better-sqlite3）----
@@ -91,6 +108,47 @@ ipcMain.handle('app:open-data-folder', () => {
   const dir = app.getPath('userData')
   shell.openPath(dir)
   return dir
+})
+
+// 备份数据库：弹出保存对话框，将 SQLite 文件复制到用户选择的位置
+ipcMain.handle('app:backup-db', async () => {
+  if (!db) throw new Error('数据库未初始化，请执行 npm run rebuild')
+  const res = await dialog.showSaveDialog({
+    title: '备份数据库',
+    defaultPath: `print-track-backup-${new Date().toISOString().slice(0, 10)}.db`,
+    filters: [
+      { name: 'SQLite 数据库', extensions: ['db'] },
+      { name: '所有文件', extensions: ['*'] },
+    ],
+  })
+  if (res.canceled || !res.filePath) return { ok: false as const }
+  await db.backup(res.filePath)
+  return { ok: true as const, path: res.filePath }
+})
+
+// 主题偏好持久化（主进程读它决定窗口背景色）
+ipcMain.handle('app:save-theme', (_e, t: string) => {
+  try {
+    const p = path.join(app.getPath('userData'), 'ui-pref.json')
+    fs.writeFileSync(p, JSON.stringify({ theme: t === 'dark' ? 'dark' : 'light' }), 'utf8')
+  } catch {
+    // 写入失败不影响功能
+  }
+})
+
+// 导出 CSV：渲染端拼好内容，这里弹保存框写文件（加 BOM 保证 Excel 打开中文不乱码）
+ipcMain.handle('app:export-csv', async (_e, filename: string, csv: string) => {
+  const res = await dialog.showSaveDialog({
+    title: '导出 CSV',
+    defaultPath: filename,
+    filters: [
+      { name: 'CSV 文件', extensions: ['csv'] },
+      { name: '所有文件', extensions: ['*'] },
+    ],
+  })
+  if (res.canceled || !res.filePath) return { ok: false as const }
+  fs.writeFileSync(res.filePath, '\uFEFF' + csv, 'utf8')
+  return { ok: true as const, path: res.filePath }
 })
 
 // 视频链接抓取：仅哔哩哔哩

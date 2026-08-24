@@ -9,6 +9,9 @@ contextBridge.exposeInMainWorld('db', {
 
 contextBridge.exposeInMainWorld('app', {
   openDataFolder: () => ipcRenderer.invoke('app:open-data-folder'),
+  backupDatabase: () => ipcRenderer.invoke('app:backup-db'),
+  saveTheme: (t: string) => ipcRenderer.invoke('app:save-theme', t),
+  exportCsv: (filename: string, csv: string) => ipcRenderer.invoke('app:export-csv', filename, csv),
 })
 
 // 视频链接抓取（仅哔哩哔哩）

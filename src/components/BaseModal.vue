@@ -19,22 +19,32 @@ function onKey(e: KeyboardEvent) {
 watch(
   () => props.open,
   (v) => {
-    if (v) window.addEventListener('keydown', onKey)
-    else window.removeEventListener('keydown', onKey)
+    if (v) {
+      window.addEventListener('keydown', onKey)
+      document.body.style.overflow = 'hidden'
+    } else {
+      window.removeEventListener('keydown', onKey)
+      document.body.style.overflow = ''
+    }
   },
 )
 
-onUnmounted(() => window.removeEventListener('keydown', onKey))
+onUnmounted(() => {
+  window.removeEventListener('keydown', onKey)
+  document.body.style.overflow = ''
+})
 </script>
 
 <template>
   <Teleport to="body">
-    <Transition name="fade">
+    <Transition name="modal">
       <div v-if="open" class="overlay" @click.self="close">
         <div class="modal" :style="{ width: width || '520px' }">
           <div class="modal-head">
             <h3 class="modal-title">{{ title }}</h3>
-            <button class="x" @click="close" aria-label="关闭">×</button>
+            <button class="x" @click="close" aria-label="关闭">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
+            </button>
           </div>
           <div class="modal-body">
             <slot />
@@ -81,13 +91,17 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
 .x {
   border: none;
   background: transparent;
-  font-size: 22px;
-  line-height: 1;
   color: var(--muted);
   cursor: pointer;
-  padding: 0 4px;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: var(--transition);
 }
-.x:hover { color: var(--text); }
+.x:hover { color: var(--text); background: var(--hover); }
 .modal-body { padding: 18px; overflow-y: auto; }
 .modal-foot {
   padding: 14px 18px;

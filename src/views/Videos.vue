@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import {
   listWorks,
   listVideos,
@@ -12,10 +12,14 @@ import {
   type Video,
 } from '@/db/api'
 import { useUiStore } from '@/stores/ui'
+import { useToast } from '@/stores/toast'
+import { useCountUp } from '@/composables/useCountUp'
 import BaseModal from '@/components/BaseModal.vue'
 import EmptyState from '@/components/EmptyState.vue'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
 
 const ui = useUiStore()
+const toast = useToast()
 const works = ref<Work[]>([])
 const videos = ref<Video[]>([])
 const showModal = ref(false)
@@ -28,8 +32,15 @@ const refreshingAll = ref(false)
 const lastRefresh = ref<string>('')
 // 可见的抓取状态（成功/失败原因），避免自动抓取静默吞错、手动抓取只弹一次 alert
 const fetchStatus = ref<{ kind: 'ok' | 'err' | 'idle'; text: string }>({ kind: 'idle', text: '' })
+let statusTimer: ReturnType<typeof setTimeout> | null = null
 function setStatus(kind: 'ok' | 'err' | 'idle', text = '') {
   fetchStatus.value = { kind, text }
+  if (statusTimer) {
+    clearTimeout(statusTimer)
+    statusTimer = null
+  }
+  // 成功提示 6s 后自动收起；失败保留给用户查看原因
+  if (kind === 'ok') statusTimer = setTimeout(() => setStatus('idle'), 6000)
 }
 
 async function reload() {
@@ -52,6 +63,14 @@ const stats = computed(() => ({
   comments: scopedVideos.value.reduce((s, v) => s + (v.comments || 0), 0),
 }))
 
+// 数字滚动
+const cViews = useCountUp(() => stats.value.views)
+const cLikes = useCountUp(() => stats.value.likes)
+const cComments = useCountUp(() => stats.value.comments)
+function fmt(n: number): string {
+  return n.toLocaleString()
+}
+
 // 按作品聚合
 const byWork = computed(() => {
   const map = new Map<number, { name: string; views: number; likes: number; comments: number; count: number; last: string | null }>()
@@ -65,6 +84,23 @@ const byWork = computed(() => {
     map.set(v.work_id, cur)
   }
   return Array.from(map.values()).sort((a, b) => b.views - a.views)
+})
+
+// ---- 表格点列排序（播放/点赞/评论，点击切换升/降序）----
+type NumKey = 'views' | 'likes' | 'comments'
+const sortKey = ref<NumKey | null>(null)
+const sortDir = ref<1 | -1>(-1)
+function setSort(k: NumKey) {
+  if (sortKey.value === k) sortDir.value = (sortDir.value * -1) as 1 | -1
+  else {
+    sortKey.value = k
+    sortDir.value = -1
+  }
+}
+const displayVideos = computed(() => {
+  if (!sortKey.value) return scopedVideos.value
+  const k = sortKey.value
+  return [...scopedVideos.value].sort((a, b) => ((a[k] ?? 0) - (b[k] ?? 0)) * sortDir.value)
 })
 
 function workName(id: number): string {
@@ -133,6 +169,14 @@ function openCreate() {
   form.value = { work_id: '', url: '', published_at: '', views: '', likes: '', comments: '' }
   showModal.value = true
 }
+
+// 快捷键 N：打开新增视频弹窗（App 层广播）
+watch(
+  () => ui.newSignal,
+  () => {
+    if (!showModal.value) openCreate()
+  },
+)
 function openEdit(v: Video) {
   editingId.value = v.id
   form.value = {
@@ -145,8 +189,20 @@ function openEdit(v: Video) {
   }
   showModal.value = true
 }
+// 表单内按 Enter 直接保存（仅对输入框生效）
+function onFormEnter(e: KeyboardEvent) {
+  const t = e.target as HTMLElement
+  if (t.tagName === 'INPUT') {
+    e.preventDefault()
+    submit()
+  }
+}
+
 async function submit() {
-  if (!form.value.work_id || !form.value.url) return
+  if (!form.value.work_id || !form.value.url) {
+    toast.error('请选择关联作品并填写 B 站链接')
+    return
+  }
   const payload = {
     work_id: Number(form.value.work_id),
     url: form.value.url,
@@ -155,15 +211,30 @@ async function submit() {
     likes: Number(form.value.likes) || 0,
     comments: Number(form.value.comments) || 0,
   }
-  if (editingId.value != null) await updateVideo(editingId.value, payload)
+  const editId = editingId.value
+  const isEdit = editId != null
+  if (isEdit) await updateVideo(editId, payload)
   else await createVideo(payload)
   showModal.value = false
   await reload()
+  toast.success(isEdit ? '视频已更新' : '视频已添加')
 }
-async function remove(v: Video) {
-  if (!window.confirm('确定删除这条视频记录？')) return
+
+// 删除：自定义确认弹窗（替代 window.confirm）
+const confirmRemove = ref(false)
+const removeTarget = ref<Video | null>(null)
+function askRemove(v: Video) {
+  removeTarget.value = v
+  confirmRemove.value = true
+}
+async function doRemove() {
+  const v = removeTarget.value
+  if (!v) return
+  confirmRemove.value = false
+  removeTarget.value = null
   await deleteVideo(v.id)
   await reload()
+  toast.success('视频记录已删除')
 }
 </script>
 
@@ -185,7 +256,9 @@ async function remove(v: Video) {
         </div>
       </div>
       <button class="btn ghost" :disabled="refreshingAll" @click="refreshAll">
-        {{ refreshingAll ? '抓取中…' : '↻ 立即抓取全部' }}
+        <span v-if="refreshingAll" class="spinner"></span>
+        <span v-else>↻</span>
+        {{ refreshingAll ? '抓取中…' : '立即抓取全部' }}
       </button>
     </div>
     <div v-if="lastRefresh" class="last-refresh">上次手动刷新：{{ lastRefresh }}</div>
@@ -196,15 +269,15 @@ async function remove(v: Video) {
     </div>
     <p class="hint">提示：应用启动与每 24 小时会自动抓取；若自动抓取无数据，请点「↻ 立即抓取全部」或单条「↻ 抓取」，下方状态条会显示真实失败原因（如 B 站返回 -412 拦截，多为网络/地区限制）。</p>
 
-    <div class="stat-grid">
-      <div class="stat"><div class="stat-value">{{ stats.views }}</div><div class="stat-label">总播放</div></div>
-      <div class="stat"><div class="stat-value">{{ stats.likes }}</div><div class="stat-label">总点赞</div></div>
-      <div class="stat"><div class="stat-value">{{ stats.comments }}</div><div class="stat-label">总评论</div></div>
+    <div class="stat-grid stagger">
+      <div class="stat"><div class="stat-value">{{ fmt(cViews) }}</div><div class="stat-label">总播放</div></div>
+      <div class="stat"><div class="stat-value">{{ fmt(cLikes) }}</div><div class="stat-label">总点赞</div></div>
+      <div class="stat"><div class="stat-value">{{ fmt(cComments) }}</div><div class="stat-label">总评论</div></div>
     </div>
 
     <div v-if="byWork.length" class="card">
       <h2 class="section-title">按作品汇总</h2>
-      <div class="agg">
+      <div class="agg stagger">
         <div v-for="a in byWork" :key="a.name" class="agg-card">
           <div class="agg-name">{{ a.name }}</div>
           <div class="agg-row"><span>播放</span><b>{{ a.views }}</b></div>
@@ -218,10 +291,19 @@ async function remove(v: Video) {
     <div v-if="scopedVideos.length" class="mt">
       <table class="table">
         <thead>
-          <tr><th>作品</th><th>平台</th><th>日期</th><th>播放</th><th>点赞</th><th>评论</th><th>抓取</th><th></th></tr>
+          <tr>
+            <th>作品</th>
+            <th>平台</th>
+            <th>日期</th>
+            <th class="th-sort" @click="setSort('views')">播放 <span class="arrow" :class="{ on: sortKey === 'views' }">{{ sortKey === 'views' && sortDir === 1 ? '▴' : '▾' }}</span></th>
+            <th class="th-sort" @click="setSort('likes')">点赞 <span class="arrow" :class="{ on: sortKey === 'likes' }">{{ sortKey === 'likes' && sortDir === 1 ? '▴' : '▾' }}</span></th>
+            <th class="th-sort" @click="setSort('comments')">评论 <span class="arrow" :class="{ on: sortKey === 'comments' }">{{ sortKey === 'comments' && sortDir === 1 ? '▴' : '▾' }}</span></th>
+            <th>抓取</th>
+            <th></th>
+          </tr>
         </thead>
         <tbody>
-          <tr v-for="v in scopedVideos" :key="v.id">
+          <tr v-for="v in displayVideos" :key="v.id">
             <td>{{ workName(v.work_id) }}</td>
             <td><span class="tag">B站</span></td>
             <td class="mono">{{ v.published_at || '—' }}</td>
@@ -231,11 +313,12 @@ async function remove(v: Video) {
             <td class="mono fetched">{{ (v.last_fetched || '—').slice(0, 10) }}</td>
             <td class="ops">
               <button class="mini" :disabled="fetchingId === v.id" @click="refreshOne(v)">
-                {{ fetchingId === v.id ? '抓取中…' : '↻ 抓取' }}
+                <span v-if="fetchingId === v.id" class="spinner"></span>
+                <span v-else>↻ 抓取</span>
               </button>
               <a v-if="v.url" :href="v.url" target="_blank" class="mini">打开</a>
               <button class="mini" @click="openEdit(v)">编辑</button>
-              <button class="mini danger" @click="remove(v)">删除</button>
+              <button class="mini danger" @click="askRemove(v)">删除</button>
             </td>
           </tr>
         </tbody>
@@ -245,7 +328,7 @@ async function remove(v: Video) {
     <EmptyState v-else emoji="📹" title="还没有视频数据" desc="记录发布的 B 站视频，自动按作品汇总并每日抓取最新数据。" />
 
     <BaseModal :open="showModal" :title="editingId != null ? '编辑视频' : '新增视频'" width="560px" @close="showModal = false">
-      <div class="form-grid">
+      <div class="form-grid" @keydown.enter="onFormEnter">
         <label class="field">关联作品
           <select v-model="form.work_id" class="select">
             <option value="">选择作品</option>
@@ -256,6 +339,7 @@ async function remove(v: Video) {
           <div class="url-row">
             <input v-model="form.url" class="input" placeholder="https://www.bilibili.com/video/BV…" />
             <button class="btn sm" :disabled="fetchingForm || !form.url" @click="fetchIntoForm">
+              <span v-if="fetchingForm" class="spinner spinner-light"></span>
               {{ fetchingForm ? '抓取中…' : '抓取并填充' }}
             </button>
           </div>
@@ -278,6 +362,16 @@ async function remove(v: Video) {
         <button class="btn" @click="submit">保存</button>
       </template>
     </BaseModal>
+
+    <ConfirmDialog
+      :open="confirmRemove"
+      danger
+      title="删除视频记录"
+      message="确定删除这条视频记录？删除后需重新添加才会恢复统计。"
+      confirm-text="删除"
+      @cancel="confirmRemove = false"
+      @confirm="doRemove"
+    />
   </div>
 </template>
 
@@ -304,6 +398,21 @@ async function remove(v: Video) {
 .agg-row b { color: var(--text); }
 .agg-foot { font-size: 12px; color: var(--muted); margin-top: 6px; }
 .mono { font-variant-numeric: tabular-nums; font-size: 13px; }
+.th-sort { cursor: pointer; user-select: none; white-space: nowrap; }
+.th-sort:hover { color: var(--accent); }
+.th-sort .arrow { opacity: 0.35; font-size: 11px; }
+.th-sort .arrow.on { opacity: 1; color: var(--accent); }
+.spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--line-strong);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  display: inline-block;
+  vertical-align: -2px;
+  animation: spin 0.7s linear infinite;
+}
+.spinner-light { border-color: rgba(255, 255, 255, 0.4); border-top-color: #fff; }
 .ops { display: flex; gap: 6px; align-items: center; white-space: nowrap; }
 .mini { border: 1px solid var(--line); background: var(--panel-2); border-radius: 7px; padding: 4px 9px; font-size: 12px; cursor: pointer; transition: var(--transition); }
 .mini:hover { background: var(--hover); }

@@ -3,6 +3,16 @@
   <head>
     <meta charset="UTF-8" />
     <title>PrintTrack · 3D 打印进度管理</title>
+    <script>
+      // 首帧渲染前应用已保存的主题（未选择时跟随系统），避免启动闪白屏
+      try {
+        var t = localStorage.getItem('printtrack-theme')
+        var wantDark =
+          t === 'dark' ||
+          ((!t || t === 'system') && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)
+        if (wantDark) document.documentElement.setAttribute('data-theme', 'dark')
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="app"></div>

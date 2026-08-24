@@ -193,6 +193,25 @@ export async function listPrintJobs(workId: number): Promise<PrintJob[]> {
   return db.query<PrintJob>('SELECT * FROM print_jobs WHERE work_id = ? ORDER BY id DESC', [workId])
 }
 
+export async function deletePrintJob(id: number): Promise<void> {
+  await db.run('DELETE FROM print_jobs WHERE id = ?', [id])
+}
+
+// 本月打印统计：总次数与成功次数（按开始时间，缺省用结束时间）
+export async function monthPrintStats(): Promise<{ total: number; success: number }> {
+  const d = new Date()
+  const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`
+  const t = await db.get<{ c: number }>(
+    'SELECT COUNT(*) AS c FROM print_jobs WHERE date(COALESCE(started_at, ended_at)) >= ?',
+    [iso],
+  )
+  const s = await db.get<{ c: number }>(
+    "SELECT COUNT(*) AS c FROM print_jobs WHERE result = 'success' AND date(COALESCE(started_at, ended_at)) >= ?",
+    [iso],
+  )
+  return { total: t?.c ?? 0, success: s?.c ?? 0 }
+}
+
 export interface RecentJob extends PrintJob {
   work_name: string
 }
@@ -368,8 +387,11 @@ export async function createSchedule(input: Partial<Schedule>): Promise<number> 
   return Number(res.lastInsertRowid)
 }
 
+// 允许更新的列（防止动态拼接出非法 SQL）
+const SCHEDULE_KEYS = ['work_id', 'planned_start', 'planned_end', 'priority', 'note']
+
 export async function updateSchedule(id: number, patch: Partial<Schedule>): Promise<void> {
-  const keys = Object.keys(patch).filter((k) => k in ({} as Schedule))
+  const keys = Object.keys(patch).filter((k) => SCHEDULE_KEYS.includes(k))
   if (keys.length === 0) return
   const setClause = keys.map((k) => `${k} = ?`).join(', ')
   await db.run(`UPDATE schedule SET ${setClause} WHERE id = ?`, [...keys.map((k) => (patch as any)[k]), id])
