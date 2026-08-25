@@ -335,12 +335,18 @@ function onSpinEnd() {
 .logo {
   font-size: 20px;
   color: #fff;
-  background: linear-gradient(135deg, var(--accent), #7aa2ff);
+  background: linear-gradient(135deg, var(--accent), #7aa2ff, var(--accent));
+  background-size: 220% 220%;
+  animation: logoShift 5s ease-in-out infinite;
   width: 30px; height: 30px;
   display: inline-flex; align-items: center; justify-content: center;
   border-radius: 9px;
   box-shadow: var(--shadow-sm);
   transition: transform 0.25s var(--ease-spring);
+}
+@keyframes logoShift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
 }
 .brand:hover .logo { transform: rotate(-8deg) scale(1.08); }
 .brand-name { font-weight: 800; font-size: 17px; letter-spacing: -0.3px; }
@@ -488,8 +494,8 @@ function onSpinEnd() {
 
 .page-enter-active { transition: opacity 0.22s var(--ease-out), transform 0.22s var(--ease-out); }
 .page-leave-active { transition: opacity 0.14s ease, transform 0.14s ease; }
-.page-enter-from { opacity: 0; transform: translateY(10px); }
-.page-leave-to { opacity: 0; transform: translateY(-6px); }
+.page-enter-from { opacity: 0; transform: translateY(10px) scale(0.995); }
+.page-leave-to { opacity: 0; transform: translateY(-6px) scale(0.998); }
 
 /* 设置齿轮（参考 acgn-records） */
 .gear { width: 18px; height: 18px; flex-shrink: 0; opacity: 0.85; transform-box: fill-box; transform-origin: center; transform: rotate(30deg); transition: transform 0.18s ease; }

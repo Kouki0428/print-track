@@ -32,4 +32,16 @@ const cls = computed(() => `badge--${colorMap[props.status]}`)
 .badge--green { --c: var(--green); --c-bg: var(--green-bg); }
 .badge--red { --c: var(--red); --c-bg: var(--red-bg); }
 .badge--gray { --c: var(--gray); --c-bg: var(--gray-bg); }
+
+/* 「制作中」= 活跃状态：圆点呼吸；「逾期」= 紧迫：急促脉冲 */
+.badge--orange .dot { animation: dotBreath 1.8s ease-in-out infinite; }
+.badge--red .dot { animation: dotUrgent 1.1s ease-in-out infinite; }
+@keyframes dotBreath {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.45; transform: scale(0.8); }
+}
+@keyframes dotUrgent {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.3; transform: scale(1.25); }
+}
 </style>

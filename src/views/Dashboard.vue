@@ -246,7 +246,7 @@ function shortDate(d: string): string {
             class="trend-col"
             :title="`周(${t.label}) 打印 ${t.total} 次 · 成功 ${t.success}`"
           >
-            <div class="trend-bar" :style="{ height: (t.total / maxWeek) * 100 + '%' }">
+            <div class="trend-bar" :style="{ height: (t.total / maxWeek) * 100 + '%', animationDelay: i * 45 + 'ms' }">
               <div class="trend-fill" :style="{ height: t.total ? (t.success / t.total) * 100 + '%' : '0' }"></div>
             </div>
             <span class="trend-label">{{ t.label }}</span>
@@ -338,6 +338,12 @@ function shortDate(d: string): string {
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
+  transform-origin: bottom;
+  animation: growY 0.5s var(--ease-spring) backwards;
+}
+@keyframes growY {
+  from { transform: scaleY(0); }
+  to { transform: scaleY(1); }
 }
 .trend-fill { background: linear-gradient(180deg, var(--green), var(--accent)); border-radius: 0; transition: height 0.4s var(--ease-out); }
 .trend-label { font-size: 10px; color: var(--muted); white-space: nowrap; }
@@ -351,8 +357,8 @@ function shortDate(d: string): string {
   border-radius: 999px;
   white-space: nowrap;
 }
-.due-badge.overdue { color: var(--red); background: var(--red-bg); }
-.due-badge.today { color: #fff; background: var(--orange); }
+.due-badge.overdue { color: var(--red); background: var(--red-bg); animation: pulse 1.2s ease-in-out infinite; }
+.due-badge.today { color: #fff; background: var(--orange); animation: pulse 1.6s ease-in-out infinite; }
 .due-badge.soon { color: var(--orange); background: var(--orange-bg); }
 .due-badge.normal { color: var(--text-2); background: var(--gray-bg); }
 

@@ -133,15 +133,17 @@ a:hover { text-decoration: underline; }
   padding: 8px 14px;
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
-  background: var(--accent);
+  background: linear-gradient(135deg, var(--accent), var(--accent-hover));
+  background-size: 160% 160%;
+  background-position: 0% 0%;
   color: var(--accent-text);
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
-  transition: var(--transition);
+  transition: background-position 0.3s ease, transform 0.15s ease, box-shadow 0.2s ease;
   white-space: nowrap;
 }
-.btn:hover { background: var(--accent-hover); box-shadow: 0 4px 14px rgba(59, 111, 224, 0.28); transform: translateY(-1px); }
+.btn:hover { background-position: 100% 100%; box-shadow: 0 4px 14px rgba(59, 111, 224, 0.28); transform: translateY(-1px); }
 .btn:active { transform: translateY(0) scale(0.97); box-shadow: none; }
 .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .btn:disabled { opacity: 0.55; cursor: default; pointer-events: none; }
@@ -151,8 +153,8 @@ a:hover { text-decoration: underline; }
   border-color: var(--line-strong);
 }
 .btn.ghost:hover { background: var(--hover); box-shadow: none; transform: none; border-color: var(--muted); }
-.btn.danger { background: var(--red); }
-.btn.danger:hover { filter: brightness(0.95); box-shadow: 0 4px 14px rgba(226, 60, 60, 0.3); }
+.btn.danger { background: linear-gradient(135deg, var(--red), #f06464); background-size: 160% 160%; }
+.btn.danger:hover { filter: none; background-position: 100% 100%; box-shadow: 0 4px 14px rgba(226, 60, 60, 0.3); }
 .btn.sm { padding: 5px 10px; font-size: 12px; }
 
 /* ---------- 表单 ---------- */
@@ -265,7 +267,15 @@ a:hover { text-decoration: underline; }
   color: var(--muted);
   text-align: center;
 }
-.empty-state .emoji { font-size: 40px; opacity: 0.8; }
+.empty-state .emoji {
+  font-size: 40px;
+  opacity: 0.85;
+  animation: emojiFloat 3.2s ease-in-out infinite;
+}
+@keyframes emojiFloat {
+  0%, 100% { transform: translateY(0) rotate(-4deg); }
+  50% { transform: translateY(-7px) rotate(4deg); }
+}
 .empty-state .title { font-size: 15px; font-weight: 600; color: var(--text-2); }
 .empty-state .desc { font-size: 13px; max-width: 320px; }
 

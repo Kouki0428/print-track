@@ -23,6 +23,7 @@ import BaseModal from '@/components/BaseModal.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import ColorPalette from '@/components/ColorPalette.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
+import { fireConfetti } from '@/composables/useConfetti'
 
 const works = useWorksStore()
 const ui = useUiStore()
@@ -121,11 +122,27 @@ function workColors(w: Work): string[] {
   return w.material_colors || []
 }
 
-// 打印类项目：缩略图用首个/末个关联色做渐变背景
+// 缩略图背景：print 用关联色渐变；其余按名称哈希取多彩预设，避免整页同色
+const THUMB_GRADIENTS: [string, string][] = [
+  ['#3b6fe0', '#7aa2ff'],
+  ['#8b5cf6', '#c4a5ff'],
+  ['#1f9d57', '#5ecf92'],
+  ['#e8912f', '#f6c27a'],
+  ['#e23c3c', '#f58a8a'],
+  ['#0ea5b7', '#6fd7e3'],
+  ['#d9469c', '#f2a0cd'],
+  ['#6366f1', '#a0aef5'],
+]
+function hashName(s: string): number {
+  let h = 0
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0
+  return h
+}
 function thumbStyle(w: Work): Record<string, string> {
   const cs = w.type === 'print' ? workColors(w) : []
-  if (!cs.length) return {}
-  return { background: `linear-gradient(135deg, ${cs[0]}, ${cs[cs.length - 1]})` }
+  if (cs.length) return { background: `linear-gradient(135deg, ${cs[0]}, ${cs[cs.length - 1]})` }
+  const [a, b] = THUMB_GRADIENTS[hashName(w.name) % THUMB_GRADIENTS.length]
+  return { background: `linear-gradient(135deg, ${a}, ${b})` }
 }
 
 // ---- 新建表单 ----
@@ -226,6 +243,7 @@ async function quickStatus(w: Work, e: Event) {
   const s = (e.target as HTMLSelectElement).value as WorkStatus
   if (s === w.status) return
   await works.patch(w.id, { status: s })
+  if (s === 'done') fireConfetti()
   toast.success(`「${w.name}」已标记为「${STATUS_LABELS[s]}」`)
 }
 function addColorCreate(hex: string) {
@@ -284,6 +302,7 @@ async function setDetailStatus(e: Event) {
   if (!detail.value || s === detail.value.status) return
   const name = detail.value.name
   await patchDetail({ status: s })
+  if (s === 'done') fireConfetti()
   toast.success(`「${name}」已标记为「${STATUS_LABELS[s]}」`)
 }
 
@@ -299,6 +318,7 @@ async function advanceStatus() {
   const s = nextStatus.value
   const name = detail.value.name
   await patchDetail({ status: s })
+  if (s === 'done') fireConfetti()
   toast.success(`「${name}」已流转到「${STATUS_LABELS[s]}」`)
 }
 
