@@ -282,8 +282,8 @@ function onSpinEnd() {
   transition: width 0.3s var(--ease-out);
 }
 .sidebar.collapsed { width: 62px; padding-left: 10px; padding-right: 10px; }
-.sidebar.collapsed .brand { flex-direction: column; align-items: center; gap: 8px; padding-bottom: 10px; }
-.sidebar.collapsed .collapse-btn { margin-left: 0; }
+.sidebar.collapsed .logo { margin-left: -10px; }
+.sidebar.collapsed .collapse-btn { position: absolute; top: 26px; left: 34px; width: 24px; height: 24px; margin: 0; }
 .sidebar.collapsed .brand-name { position: absolute; opacity: 0; }
 /* 防止图标被 flex 压缩：图标固定不缩，文字标签可收缩并被裁切 */
 .nav-icon,
