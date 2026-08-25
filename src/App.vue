@@ -295,6 +295,10 @@ function onSpinEnd() {
 .type-btn > span:last-child,
 .theme-toggle > span:nth-child(2) { flex: 0 1 auto; min-width: 0; overflow: hidden; }
 
+/* Logo 与折叠按钮禁止 flex 压缩：展开动画初期空间不足时保持原形，按钮从边缘裁入 */
+.logo,
+.collapse-btn { flex-shrink: 0; }
+
 /* 文字淡出/淡入：收起时快速淡出（配合裁切滑出），展开时延迟淡入 */
 .sidebar .fade-el { transition: opacity 0.15s ease; }
 .sidebar.collapsed .fade-el { opacity: 0; transition: opacity 0.1s ease; }
