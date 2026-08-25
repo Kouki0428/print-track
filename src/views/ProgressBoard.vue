@@ -241,7 +241,10 @@ async function doRemoveJob() {
           <input v-model="jobForm.started_at" class="input" type="datetime-local" />
         </label>
         <label class="field">结束
-          <input v-model="jobForm.ended_at" class="input" type="datetime-local" />
+          <div class="end-row">
+            <input v-model="jobForm.ended_at" class="input" type="datetime-local" />
+            <button class="mini now-btn" type="button" title="设为当前时刻" @click="jobForm.ended_at = nowLocal()">现在</button>
+          </div>
         </label>
         <label class="field">备注
           <input v-model="jobForm.note" class="input" placeholder="可选" />
@@ -338,4 +341,8 @@ async function doRemoveJob() {
 .mini.danger { color: var(--red); border-color: var(--red-bg); }
 .mini.danger:hover { background: var(--red-bg); opacity: 1; }
 .dur-hint { font-size: 12px; color: var(--accent); background: var(--accent-weak); padding: 6px 10px; border-radius: 8px; font-weight: 600; align-self: flex-end; margin-bottom: 2px; white-space: nowrap; }
+.end-row { display: flex; gap: 6px; align-items: center; }
+.end-row .input { flex: 1; min-width: 0; }
+.now-btn { white-space: nowrap; opacity: 0.75; }
+.now-btn:hover { opacity: 1; border-color: var(--accent); color: var(--accent); }
 </style>

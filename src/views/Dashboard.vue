@@ -8,6 +8,7 @@ import {
   recentJobs,
   listSchedules,
   monthPrintStats,
+  weeklyPrintTrend,
   type RecentJob,
   type Schedule,
   type WorkStatus,
@@ -21,13 +22,18 @@ const router = useRouter()
 const recent = ref<RecentJob[]>([])
 const schedules = ref<Schedule[]>([])
 const mStats = ref({ total: 0, success: 0 })
+const trend = ref<{ label: string; total: number; success: number }[]>([])
 
 onMounted(async () => {
   await works.fetchAll()
   recent.value = await recentJobs(6)
   schedules.value = await listSchedules()
   mStats.value = await monthPrintStats()
+  trend.value = await weeklyPrintTrend(8)
 })
+
+// 趋势柱高（最大值为基准）
+const maxWeek = computed(() => Math.max(1, ...trend.value.map((t) => t.total)))
 
 // 本月打印成功率（无记录时为 null 不显示）
 const successRate = computed(() =>
@@ -218,6 +224,20 @@ function shortDate(d: string): string {
           本月打印 <b>{{ mStats.total }}</b> 次 · 成功率
           <b :style="{ color: successRate >= 80 ? 'var(--green)' : successRate >= 50 ? 'var(--orange)' : 'var(--red)' }">{{ successRate }}%</b>
         </div>
+        <!-- 近 8 周打印趋势 -->
+        <div v-if="trend.some((t) => t.total)" class="trend">
+          <div
+            v-for="(t, i) in trend"
+            :key="i"
+            class="trend-col"
+            :title="`周(${t.label}) 打印 ${t.total} 次 · 成功 ${t.success}`"
+          >
+            <div class="trend-bar" :style="{ height: (t.total / maxWeek) * 100 + '%' }">
+              <div class="trend-fill" :style="{ height: t.total ? (t.success / t.total) * 100 + '%' : '0' }"></div>
+            </div>
+            <span class="trend-label">{{ t.label }}</span>
+          </div>
+        </div>
         <ul v-if="recent.length" class="feed">
           <li v-for="j in recent" :key="j.id">
             <span class="feed-name">{{ j.work_name }}</span>
@@ -279,6 +299,31 @@ function shortDate(d: string): string {
 /* 即将截止 */
 .month-line { font-size: 12px; color: var(--muted); margin-bottom: 12px; }
 .month-line b { font-variant-numeric: tabular-nums; }
+
+/* 近 8 周打印趋势 */
+.trend {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  height: 72px;
+  margin-bottom: 14px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--line);
+}
+.trend-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; height: 100%; justify-content: flex-end; }
+.trend-bar {
+  width: 70%;
+  max-width: 26px;
+  min-height: 3px;
+  background: var(--bg-soft);
+  border-radius: 5px 5px 0 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+.trend-fill { background: linear-gradient(180deg, var(--green), var(--accent)); border-radius: 0; transition: height 0.4s var(--ease-out); }
+.trend-label { font-size: 10px; color: var(--muted); white-space: nowrap; }
 .due-list { gap: 6px; }
 .due-row { padding: 5px 8px; margin: 0 -8px; border-radius: 9px; cursor: pointer; transition: var(--transition); }
 .due-row:hover { background: var(--hover); }

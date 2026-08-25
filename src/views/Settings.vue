@@ -5,6 +5,7 @@ import { themePref, setThemePref, type ThemePref } from '@/theme'
 import { useToast } from '@/stores/toast'
 
 const toast = useToast()
+const appVersion = __APP_VERSION__
 const counts = ref({ works: 0, prints: 0, videos: 0, schedules: 0, byType: {} as Record<string, number> })
 const backingUp = ref(false)
 
@@ -197,7 +198,7 @@ async function exportJobsCsv() {
 
     <div class="card">
       <div class="sec-title">关于</div>
-      <p class="line"><span class="k">应用</span><span>PrintTrack · 3D 打印进度管理与规划</span></p>
+      <p class="line"><span class="k">应用</span><span>PrintTrack · 3D 打印进度管理与规划（{{ appVersion }}）</span></p>
       <p class="line"><span class="k">技术栈</span><span>Electron + Vue3 + TypeScript + Vite + Pinia</span></p>
     </div>
     </div>

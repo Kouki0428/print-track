@@ -2,8 +2,15 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import electron from 'vite-plugin-electron/simple'
 import { fileURLToPath, URL } from 'node:url'
+import { readFileSync } from 'node:fs'
+
+// 注入应用版本号（渲染端通过 __APP_VERSION__ 使用，避免多处硬编码）
+const pkg = JSON.parse(readFileSync('./package.json', 'utf8'))
 
 export default defineConfig({
+  define: {
+    __APP_VERSION__: JSON.stringify(`v${pkg.version}`),
+  },
   plugins: [
     vue(),
     electron({

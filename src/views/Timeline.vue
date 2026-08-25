@@ -253,7 +253,12 @@ async function doRemove() {
           <div v-for="w in weeks" :key="w.month" class="week">
             <div class="week-month">{{ w.month }}</div>
             <div class="week-days">
-              <span v-for="d in w.days" :key="d.idx" class="day" :class="{ today: d.today }">{{ d.date }}</span>
+              <span
+                v-for="d in w.days"
+                :key="d.idx"
+                class="day"
+                :class="{ today: d.today, weekend: d.idx % 7 >= 5 }"
+              >{{ d.date }}</span>
             </div>
           </div>
         </div>
@@ -267,6 +272,7 @@ async function doRemove() {
             @click="router.push(`/library?work=${s.work_id}`)"
           >{{ workName(s.work_id) }}</div>
           <div class="track" :style="{ width: totalDays * COL_W + 'px' }">
+            <div class="weekend-layer"></div>
             <div v-if="todayIdx >= 0" class="today-line" :style="{ left: todayIdx * COL_W + COL_W / 2 - 1 + 'px' }"></div>
             <div
               v-if="s.planned_start"
@@ -353,6 +359,7 @@ async function doRemove() {
 .week-month { font-size: 11px; color: var(--muted); padding: 2px 0 4px; text-align: center; font-weight: 600; }
 .week-days { display: flex; }
 .day { width: 38px; text-align: center; font-size: 11px; color: var(--muted); padding: 3px 0; }
+.day.weekend { color: var(--text-2); background: var(--weekend); }
 .day.today { color: var(--accent); font-weight: 700; background: var(--accent-weak); border-radius: 6px; }
 .rows { display: flex; flex-direction: column; gap: 6px; }
 .srow { display: flex; align-items: center; gap: 0; border-radius: 8px; transition: var(--transition); }
@@ -361,6 +368,15 @@ async function doRemove() {
 .sname:hover { color: var(--accent); text-decoration: underline; }
 .sname.overdue { color: var(--red); }
 .track { position: relative; height: 32px; flex-shrink: 0; }
+.weekend-layer {
+  position: absolute;
+  inset: -2px 0;
+  pointer-events: none;
+  border-radius: 4px;
+  background:
+    repeating-linear-gradient(to right, transparent 0, transparent 190px, var(--weekend) 190px, var(--weekend) 228px),
+    repeating-linear-gradient(to right, transparent 0, transparent 228px, var(--weekend) 228px, var(--weekend) 266px);
+}
 .today-line {
   position: absolute;
   top: -24px;

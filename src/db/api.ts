@@ -212,6 +212,41 @@ export async function monthPrintStats(): Promise<{ total: number; success: numbe
   return { total: t?.c ?? 0, success: s?.c ?? 0 }
 }
 
+// 近 N 周打印趋势（按周一为一周起点，升序返回，空周补零）
+export async function weeklyPrintTrend(
+  weeks = 8,
+): Promise<{ label: string; total: number; success: number }[]> {
+  const rows = await db.query<{ d: string | null; result: string | null }>(
+    `SELECT substr(COALESCE(started_at, ended_at), 1, 10) AS d, result
+     FROM print_jobs
+     WHERE COALESCE(started_at, ended_at) IS NOT NULL`,
+  )
+  const mondayOf = (dateStr: string) => {
+    const dt = new Date(dateStr + 'T00:00:00')
+    dt.setDate(dt.getDate() - ((dt.getDay() + 6) % 7))
+    return dt.getTime()
+  }
+  const now = new Date()
+  now.setHours(0, 0, 0, 0)
+  const curMonday = new Date(now.setDate(now.getDate() - ((now.getDay() + 6) % 7))).getTime()
+
+  // 桶：下标 0 为最早一周，末尾为当前周
+  const buckets: { label: string; total: number; success: number }[] = []
+  for (let i = weeks - 1; i >= 0; i--) {
+    const start = new Date(curMonday - i * 7 * 86400000)
+    buckets.push({ label: `${start.getMonth() + 1}/${start.getDate()}`, total: 0, success: 0 })
+  }
+  for (const r of rows) {
+    if (!r.d) continue
+    const idx = weeks - 1 - Math.round((curMonday - mondayOf(r.d)) / (7 * 86400000))
+    if (idx >= 0 && idx < weeks) {
+      buckets[idx].total++
+      if (r.result === 'success') buckets[idx].success++
+    }
+  }
+  return buckets
+}
+
 export interface RecentJob extends PrintJob {
   work_name: string
 }

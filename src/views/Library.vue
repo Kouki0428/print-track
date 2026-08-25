@@ -73,9 +73,14 @@ const statusFilter = ref<WorkStatus | 'all'>(
   qs && filters.includes(qs as WorkStatus) ? (qs as WorkStatus) : 'all',
 )
 
-// 全局类型过滤 + 关键字 + 状态筛选 + 排序
+// 全局类型过滤 + 关键字 + 状态筛选 + 排序（排序偏好持久化）
 type SortKey = 'updated' | 'created' | 'name' | 'status'
-const sortBy = ref<SortKey>('updated')
+const SORT_KEY = 'printtrack-sort'
+const savedSort = localStorage.getItem(SORT_KEY) as SortKey | null
+const sortBy = ref<SortKey>(
+  savedSort && ['updated', 'created', 'name', 'status'].includes(savedSort) ? savedSort : 'updated',
+)
+watch(sortBy, (v) => localStorage.setItem(SORT_KEY, v))
 const filtered = computed(() => {
   const k = keyword.value.trim().toLowerCase()
   const list = works.works.filter((w) => {
