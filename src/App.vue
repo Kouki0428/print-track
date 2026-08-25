@@ -301,7 +301,7 @@ function onSpinEnd() {
 
 /* 文字淡出/淡入：收起时快速淡出（配合裁切滑出），展开时延迟淡入 */
 .sidebar .fade-el { transition: opacity 0.15s ease; }
-.sidebar.collapsed .fade-el { opacity: 0; transition: opacity 0.1s ease; }
+.sidebar.collapsed .fade-el { opacity: 0; transition: none; }
 .sidebar:not(.collapsed) .fade-el { opacity: 1; transition: opacity 0.2s ease 0.12s; }
 
 .collapse-btn {
