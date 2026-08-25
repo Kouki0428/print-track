@@ -224,7 +224,7 @@ function onSpinEnd() {
               <path :d="gearIcon" />
             </svg>
           </span>
-          <span class="nav-label">设置</span>
+          <span class="nav-label fade-el">设置</span>
         </RouterLink>
       </nav>
       <div class="sidebar-foot">
@@ -282,8 +282,18 @@ function onSpinEnd() {
   transition: width 0.3s var(--ease-out);
 }
 .sidebar.collapsed { width: 62px; padding-left: 10px; padding-right: 10px; }
-.sidebar.collapsed .collapse-btn { display: none; }
-.sidebar.collapsed .logo { cursor: pointer; }
+.sidebar.collapsed .logo { display: none; }
+.sidebar.collapsed .collapse-btn { margin-left: 0; }
+.sidebar.collapsed .brand-name { position: absolute; opacity: 0; }
+/* 防止图标被 flex 压缩：图标固定不缩，文字标签可收缩并被裁切 */
+.nav-icon,
+.gear,
+.type-btn > span:first-child,
+.theme-toggle > span:first-child { flex-shrink: 0; }
+.nav-label,
+.nav-count,
+.type-btn > span:last-child,
+.theme-toggle > span:nth-child(2) { flex: 0 1 auto; min-width: 0; overflow: hidden; }
 
 /* 文字淡出/淡入：收起时快速淡出（配合裁切滑出），展开时延迟淡入 */
 .sidebar .fade-el { transition: opacity 0.15s ease; }
