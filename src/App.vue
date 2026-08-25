@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { onMounted, onUnmounted, computed, ref, watch } from 'vue'
 import { useWorksStore } from '@/stores/works'
@@ -166,7 +166,7 @@ function onSpinEnd() {
   <div class="app-shell">
     <aside class="sidebar" :class="{ collapsed }">
       <div class="brand">
-        <span class="logo">⬢</span>
+        <span class="logo" :title="collapsed ? '展开侧边栏 (Ctrl+B)' : ''" @click="collapsed && toggleCollapse()">⬢</span>
         <span class="brand-name fade-el">PrintTrack</span>
         <button
           class="collapse-btn"
@@ -264,7 +264,7 @@ function onSpinEnd() {
 
 <style scoped>
 .app-shell { display: block; height: 100vh; overflow: hidden; position: relative; }
-/* 侧边栏：固定定位，宽度恒定 210px，收起 = 整体左移 148px（纯 transform，零重排） */
+/* 侧边栏：固定定位独立层级——宽度动画只重排自身，内容区 margin 单帧跳变，互不牵连 */
 .sidebar {
   position: fixed;
   left: 0;
@@ -277,14 +277,15 @@ function onSpinEnd() {
   padding: 18px 12px;
   display: flex;
   flex-direction: column;
-  transform: translateX(0);
-  transition: transform 0.3s var(--ease-out);
+  overflow: hidden;
+  white-space: nowrap;
+  transition: width 0.3s var(--ease-out);
 }
-.sidebar.collapsed { transform: translateX(-148px); }
-/* 收起时折叠按钮跳到可见竖条内（跳变发生在画面外，不可见） */
-.sidebar.collapsed .collapse-btn { position: absolute; left: 17px; top: 24px; margin: 0; }
+.sidebar.collapsed { width: 62px; padding-left: 10px; padding-right: 10px; }
+.sidebar.collapsed .collapse-btn { display: none; }
+.sidebar.collapsed .logo { cursor: pointer; }
 
-/* 文字淡出/淡入：收起时随滑动快速淡出，展开时延迟淡入（图标先到位） */
+/* 文字淡出/淡入：收起时快速淡出（配合裁切滑出），展开时延迟淡入 */
 .sidebar .fade-el { transition: opacity 0.15s ease; }
 .sidebar.collapsed .fade-el { opacity: 0; transition: opacity 0.1s ease; }
 .sidebar:not(.collapsed) .fade-el { opacity: 1; transition: opacity 0.2s ease 0.12s; }
