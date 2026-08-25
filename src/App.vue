@@ -285,7 +285,8 @@ function onSpinEnd() {
 .sidebar.collapsed .brand { flex-direction: column; align-items: flex-start; gap: 6px; padding: 6px 4px 0; }
 .sidebar.collapsed .logo { margin-left: 2px; }
 .sidebar.collapsed .collapse-btn { margin-left: 3px; }
-.sidebar.collapsed .type-btn > span:first-child { margin-left: 3.5px; }
+.sidebar.collapsed .type-btn svg { width: 18px; height: 18px; }
+.sidebar.collapsed .type-btn > span:first-child { margin-left: 2px; }
 .sidebar.collapsed .theme-toggle > span:first-child { margin-left: 1px; }
 .sidebar.collapsed .brand-name { position: absolute; opacity: 0; }
 /* 防止图标被 flex 压缩：图标固定不缩，文字标签可收缩并被裁切 */
