@@ -27,14 +27,16 @@ export const useWorksStore = defineStore('works', () => {
     await fetchAll()
   }
 
+  // 局部更新：写库后只改内存里对应的一条，避免全量重查导致整列表重渲（拖拽/快捷改状态更跟手）
   async function patch(id: number, p: Partial<Work>) {
     await updateWork(id, p)
-    await fetchAll()
+    const idx = works.value.findIndex((w) => w.id === id)
+    if (idx >= 0) works.value[idx] = { ...works.value[idx], ...p }
   }
 
   async function remove(id: number) {
     await deleteWork(id)
-    await fetchAll()
+    works.value = works.value.filter((w) => w.id !== id)
   }
 
   const byStatus = computed(() => {

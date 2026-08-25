@@ -121,6 +121,7 @@ a:hover { text-decoration: underline; }
   border-radius: var(--radius);
   padding: 18px;
   box-shadow: var(--shadow-sm);
+  transition: transform 0.2s var(--ease-out), box-shadow 0.2s var(--ease-out), border-color 0.2s var(--ease-out);
 }
 .card + .card, .card + .grid, .grid + .card { margin-top: 16px; }
 
@@ -249,7 +250,7 @@ a:hover { text-decoration: underline; }
   border-radius: var(--radius);
   padding: 16px 18px;
   box-shadow: var(--shadow-sm);
-  transition: var(--transition);
+  transition: transform 0.2s var(--ease-out), box-shadow 0.2s var(--ease-out), border-color 0.2s var(--ease-out);
 }
 .stat:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
 .stat-value { font-size: 28px; font-weight: 700; color: var(--text); letter-spacing: -0.5px; }

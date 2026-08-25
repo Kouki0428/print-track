@@ -173,7 +173,6 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
   align-items: flex-start;
   justify-content: center;
   z-index: 1300;
-  backdrop-filter: blur(2px);
   padding-top: 12vh;
 }
 .qs-panel {

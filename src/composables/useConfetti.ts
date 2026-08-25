@@ -14,7 +14,7 @@ export function fireConfetti() {
   const ctx = canvas.getContext('2d')
   if (!ctx) return
 
-  const dpr = window.devicePixelRatio || 1
+  const dpr = Math.min(window.devicePixelRatio || 1, 1.5)
   canvas.width = window.innerWidth * dpr
   canvas.height = window.innerHeight * dpr
   canvas.style.width = window.innerWidth + 'px'

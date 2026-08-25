@@ -61,7 +61,6 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
   align-items: center;
   justify-content: center;
   z-index: 1100;
-  backdrop-filter: blur(2px);
 }
 .dialog {
   width: 380px;

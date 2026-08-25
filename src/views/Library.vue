@@ -841,7 +841,8 @@ async function onDropFile(w: Work, e: DragEvent) {
 .card {
   background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
   padding: 14px; display: flex; flex-direction: column; gap: 10px; cursor: pointer;
-  box-shadow: var(--shadow-sm); transition: var(--transition);
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.2s var(--ease-out), box-shadow 0.2s var(--ease-out), border-color 0.2s var(--ease-out);
 }
 .card:hover { box-shadow: var(--shadow-md); transform: translateY(-2px); border-color: var(--accent); }
 .card.file-over { border-color: var(--green); box-shadow: 0 0 0 2px var(--green-bg); }

@@ -67,7 +67,6 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   z-index: 1000;
-  backdrop-filter: blur(2px);
 }
 .modal {
   background: var(--panel);

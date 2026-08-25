@@ -340,7 +340,7 @@ async function doRemoveJob() {
   background: var(--bg-soft); border: 1px solid var(--line); border-radius: 9px;
   padding: 9px 11px; font-size: 13px; cursor: pointer;
   display: flex; align-items: center; justify-content: space-between; gap: 6px;
-  transition: var(--transition);
+  transition: transform 0.2s var(--ease-out), border-color 0.2s var(--ease-out), background 0.2s var(--ease-out), box-shadow 0.2s var(--ease-out);
 }
 .item:hover { border-color: var(--accent); background: var(--accent-weak); transform: translateY(-1px); }
 .item.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); background: var(--accent-weak); }
