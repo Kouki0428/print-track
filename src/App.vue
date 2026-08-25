@@ -37,12 +37,34 @@ watch(
 
 const appVersion = __APP_VERSION__
 
-// ---- 侧边栏折叠 ----
+// ---- 侧边栏折叠（两段式动画：文字淡出 ⇄ 宽度过渡）----
 const SIDEBAR_KEY = 'printtrack-sidebar-collapsed'
 const collapsed = ref(localStorage.getItem(SIDEBAR_KEY) === '1')
+const sidebarFading = ref(false)
+let fadeTimer: ReturnType<typeof setTimeout> | null = null
 function toggleCollapse() {
-  collapsed.value = !collapsed.value
-  localStorage.setItem(SIDEBAR_KEY, collapsed.value ? '1' : '0')
+  if (fadeTimer) {
+    clearTimeout(fadeTimer)
+    fadeTimer = null
+  }
+  if (!collapsed.value) {
+    // 收起：先淡出文字，再收窄宽度
+    sidebarFading.value = true
+    fadeTimer = setTimeout(() => {
+      collapsed.value = true
+      localStorage.setItem(SIDEBAR_KEY, '1')
+      fadeTimer = null
+    }, 150)
+  } else {
+    // 展开：先恢复宽度，再淡入文字
+    collapsed.value = false
+    localStorage.setItem(SIDEBAR_KEY, '0')
+    sidebarFading.value = true
+    fadeTimer = setTimeout(() => {
+      sidebarFading.value = false
+      fadeTimer = null
+    }, 200)
+  }
 }
 
 // ---- 快捷键帮助面板 ----
@@ -162,10 +184,10 @@ function onSpinEnd() {
 
 <template>
   <div class="app-shell">
-    <aside class="sidebar" :class="{ collapsed }">
+    <aside class="sidebar" :class="{ collapsed, fading: sidebarFading }">
       <div class="brand">
         <span class="logo">⬢</span>
-        <span v-if="!collapsed" class="brand-name">PrintTrack</span>
+        <span v-if="!collapsed" class="brand-name fade-el">PrintTrack</span>
         <button
           class="collapse-btn"
           :class="{ flipped: collapsed }"
@@ -178,7 +200,7 @@ function onSpinEnd() {
 
       <!-- 项目类型统一切换（自定义类型归入「其它」） -->
       <div class="type-switch">
-        <div v-if="!collapsed" class="type-switch-title">项目管理</div>
+        <div v-if="!collapsed" class="type-switch-title fade-el">项目管理</div>
         <button
           v-for="t in typeOptions"
           :key="t"
@@ -188,7 +210,7 @@ function onSpinEnd() {
           @click="ui.setTypeFilter(t)"
         >
           <span v-html="typeSvg(t)"></span>
-          <span>{{ typeName(t) }}</span>
+          <span class="fade-el">{{ typeName(t) }}</span>
         </button>
       </div>
 
@@ -203,8 +225,8 @@ function onSpinEnd() {
           :title="item.label"
         >
           <span class="nav-icon" v-html="iconSvg(item.icon)"></span>
-          <span class="nav-label">{{ item.label }}</span>
-          <span v-if="item.count != null" class="nav-count">{{ item.count }}</span>
+          <span class="nav-label fade-el">{{ item.label }}</span>
+          <span v-if="item.count != null" class="nav-count fade-el">{{ item.count }}</span>
         </RouterLink>
         <!-- 设置入口：6 齿齿轮，点击旋转 -->
         <RouterLink
@@ -226,13 +248,13 @@ function onSpinEnd() {
         </RouterLink>
       </nav>
       <div class="sidebar-foot">
-        <button class="kbd-hints help-open" title="查看全部快捷键" @click="showHelp = true"><kbd>?</kbd> 快捷键说明</button>
+        <button class="kbd-hints help-open fade-el" title="查看全部快捷键" @click="showHelp = true"><kbd>?</kbd> 快捷键说明</button>
         <button class="theme-toggle" @click="toggleTheme" :title="isDark ? '切换到浅色' : '切换到深色'">
           <span v-html="isDark
             ? '<svg viewBox=\'0 0 24 24\' width=\'16\' height=\'16\' fill=\'none\' stroke=\'currentColor\' stroke-width=\'2\' stroke-linecap=\'round\' stroke-linejoin=\'round\'><circle cx=\'12\' cy=\'12\' r=\'4\'/><path d=\'M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4\'/></svg>'
             : '<svg viewBox=\'0 0 24 24\' width=\'16\' height=\'16\' fill=\'none\' stroke=\'currentColor\' stroke-width=\'2\' stroke-linecap=\'round\' stroke-linejoin=\'round\'><path d=\'M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8Z\'/></svg>'"></span>
-          <span>{{ isDark ? '浅色' : '深色' }}</span>
-          <span v-if="!collapsed" class="version">{{ appVersion }}</span>
+          <span class="fade-el">{{ isDark ? '浅色' : '深色' }}</span>
+          <span v-if="!collapsed" class="version fade-el">{{ appVersion }}</span>
         </button>
       </div>
     </aside>
@@ -270,8 +292,11 @@ function onSpinEnd() {
   padding: 18px 12px;
   display: flex;
   flex-direction: column;
-  transition: width 0.25s var(--ease-out);
+  transition: width 0.3s var(--ease-out);
 }
+/* 两段式折叠动画：fading 阶段文字淡出/淡入，collapsed 阶段改变宽度 */
+.sidebar .fade-el { transition: opacity 0.16s ease; }
+.sidebar.fading .fade-el { opacity: 0; }
 .sidebar.collapsed { width: 62px; padding-left: 8px; padding-right: 8px; }
 .sidebar.collapsed .type-switch-title,
 .sidebar.collapsed .nav-label,
