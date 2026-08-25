@@ -287,21 +287,23 @@ function onSpinEnd() {
 .sidebar.collapsed .theme-toggle { justify-content: center; }
 
 .collapse-btn {
-  border: none;
-  background: transparent;
-  color: var(--muted);
+  border: 1px solid var(--line-strong);
+  background: var(--panel-2);
+  color: var(--text-2);
   cursor: pointer;
-  width: 22px;
-  height: 22px;
+  width: 28px;
+  height: 28px;
   margin-left: auto;
-  border-radius: 6px;
+  border-radius: 8px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   transition: transform 0.25s var(--ease-out), var(--transition);
   padding: 0;
+  flex-shrink: 0;
+  box-shadow: var(--shadow-sm);
 }
-.collapse-btn:hover { background: var(--hover); color: var(--text); }
+.collapse-btn:hover { background: var(--hover); color: var(--accent); border-color: var(--accent); }
 .collapse-btn.flipped { transform: rotate(180deg); margin-left: 0; }
 
 .brand { display: flex; align-items: center; gap: 9px; padding: 6px 4px 14px; }
