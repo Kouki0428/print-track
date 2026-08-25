@@ -283,7 +283,7 @@ function onSpinEnd() {
 }
 .sidebar.collapsed { width: 62px; padding-left: 10px; padding-right: 10px; }
 .sidebar.collapsed .brand { flex-direction: column; align-items: center; gap: 6px; padding: 6px 0 0; }
-.sidebar.collapsed .collapse-btn { width: 24px; height: 24px; margin-left: 0; }
+.sidebar.collapsed .collapse-btn { margin-left: 0; }
 .sidebar.collapsed .brand-name { position: absolute; opacity: 0; }
 /* 防止图标被 flex 压缩：图标固定不缩，文字标签可收缩并被裁切 */
 .nav-icon,
@@ -320,7 +320,7 @@ function onSpinEnd() {
 .collapse-btn:hover { background: var(--hover); color: var(--accent); border-color: var(--accent); }
 .collapse-btn.flipped { transform: rotate(180deg); margin-left: 0; }
 
-.brand { display: flex; align-items: flex-start; gap: 9px; padding: 6px 4px 0; height: 66px; flex-shrink: 0; }
+.brand { display: flex; align-items: flex-start; gap: 9px; padding: 6px 4px 0; height: 72px; flex-shrink: 0; }
 .logo {
   font-size: 20px;
   color: #fff;
