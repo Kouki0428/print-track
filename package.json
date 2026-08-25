@@ -18,7 +18,8 @@
     "productName": "PrintTrack",
     "files": ["dist/**", "dist-electron/**", "assets/**", "package.json"],
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "icon": "assets/icon.ico"
     }
   },
   "dependencies": {

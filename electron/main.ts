@@ -56,8 +56,9 @@ let closeToTray = false
 
 function ensureTray(win: BrowserWindow) {
   if (tray) return
-  const icon = nativeImage.createFromPath(path.join(__dirname, '../assets/tray.png'))
-  tray = new Tray(icon)
+  const icon = nativeImage.createFromPath(path.join(__dirname, '../assets/icon.png'))
+  const small = icon.isEmpty() ? icon : icon.resize({ width: 16, height: 16 })
+  tray = new Tray(small)
   tray.setToolTip('PrintTrack · 点击图标恢复窗口')
   tray.setContextMenu(
     Menu.buildFromTemplate([
@@ -86,6 +87,7 @@ function createWindow(): void {
     minHeight: 640,
     title: 'PrintTrack · 3D 打印进度管理',
     backgroundColor: readThemePref() === 'dark' ? '#14161b' : '#f4f6f9',
+    icon: path.join(__dirname, '../assets/icon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.mjs'),
       contextIsolation: true,
