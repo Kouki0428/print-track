@@ -7,6 +7,7 @@ import { typeLabel } from '@/db/api'
 import { theme, toggleTheme } from '@/theme'
 import ToastHost from '@/components/ToastHost.vue'
 import QuickSearch from '@/components/QuickSearch.vue'
+import BaseModal from '@/components/BaseModal.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -36,6 +37,27 @@ watch(
 
 const appVersion = __APP_VERSION__
 
+// ---- 侧边栏折叠 ----
+const SIDEBAR_KEY = 'printtrack-sidebar-collapsed'
+const collapsed = ref(localStorage.getItem(SIDEBAR_KEY) === '1')
+function toggleCollapse() {
+  collapsed.value = !collapsed.value
+  localStorage.setItem(SIDEBAR_KEY, collapsed.value ? '1' : '0')
+}
+
+// ---- 快捷键帮助面板 ----
+const showHelp = ref(false)
+const helpRows: [string, string][] = [
+  ['Ctrl + K', '全局搜索：项目 / 页面直达'],
+  ['Ctrl + B', '折叠 / 展开侧边栏'],
+  ['1 – 5', '切换页面'],
+  ['N', '新建（作品库 / 排期 / 视频）'],
+  ['Enter', '提交表单弹窗'],
+  ['Esc', '关闭弹窗 / 搜索面板'],
+  ['右键卡片', '编辑 · 复制名称 · 删除'],
+  ['?', '打开本说明'],
+]
+
 const nav = [
   { to: '/dashboard', label: '仪表盘', icon: 'grid' },
   { to: '/library', label: '作品库', icon: 'layers' },
@@ -44,12 +66,23 @@ const nav = [
   { to: '/videos', label: '视频统计', icon: 'play' },
 ]
 
-// ---- 全局快捷键：1-5 切换页面、N 新建（输入框/弹窗打开时忽略）----
+// ---- 全局快捷键：1-5 切换页面、N 新建、Ctrl+B 折叠侧边栏、? 帮助 ----
 const shortcutPaths = ['/dashboard', '/library', '/board', '/timeline', '/videos']
 function onGlobalKey(e: KeyboardEvent) {
+  // 全局组合键：输入框聚焦时同样生效
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') {
+    e.preventDefault()
+    toggleCollapse()
+    return
+  }
   const t = e.target as HTMLElement | null
   if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return
   if (document.querySelector('.overlay')) return
+  if (e.key === '?') {
+    e.preventDefault()
+    showHelp.value = true
+    return
+  }
   const idx = ['1', '2', '3', '4', '5'].indexOf(e.key)
   if (idx >= 0 && route.path !== shortcutPaths[idx]) router.push(shortcutPaths[idx])
   if (e.key.toLowerCase() === 'n') ui.newSignal++
@@ -129,20 +162,29 @@ function onSpinEnd() {
 
 <template>
   <div class="app-shell">
-    <aside class="sidebar">
+    <aside class="sidebar" :class="{ collapsed }">
       <div class="brand">
         <span class="logo">⬢</span>
-        <span class="brand-name">PrintTrack</span>
+        <span v-if="!collapsed" class="brand-name">PrintTrack</span>
+        <button
+          class="collapse-btn"
+          :class="{ flipped: collapsed }"
+          :title="collapsed ? '展开侧边栏 (Ctrl+B)' : '收起侧边栏 (Ctrl+B)'"
+          @click="toggleCollapse"
+        >
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+        </button>
       </div>
 
       <!-- 项目类型统一切换（自定义类型归入「其它」） -->
       <div class="type-switch">
-        <div class="type-switch-title">项目管理</div>
+        <div v-if="!collapsed" class="type-switch-title">项目管理</div>
         <button
           v-for="t in typeOptions"
           :key="t"
           class="type-btn"
           :class="{ on: ui.typeFilter === t }"
+          :title="typeName(t)"
           @click="ui.setTypeFilter(t)"
         >
           <span v-html="typeSvg(t)"></span>
@@ -158,6 +200,7 @@ function onSpinEnd() {
           :to="item.to"
           class="nav-item"
           :class="{ active: route.path.startsWith(item.to) }"
+          :title="item.label"
         >
           <span class="nav-icon" v-html="iconSvg(item.icon)"></span>
           <span class="nav-label">{{ item.label }}</span>
@@ -183,13 +226,13 @@ function onSpinEnd() {
         </RouterLink>
       </nav>
       <div class="sidebar-foot">
-        <div class="kbd-hints"><kbd>Ctrl</kbd>+<kbd>K</kbd> 搜索 · <kbd>N</kbd> 新建 · <kbd>1</kbd>–<kbd>5</kbd> 切页</div>
+        <button class="kbd-hints help-open" title="查看全部快捷键" @click="showHelp = true"><kbd>?</kbd> 快捷键说明</button>
         <button class="theme-toggle" @click="toggleTheme" :title="isDark ? '切换到浅色' : '切换到深色'">
           <span v-html="isDark
             ? '<svg viewBox=\'0 0 24 24\' width=\'16\' height=\'16\' fill=\'none\' stroke=\'currentColor\' stroke-width=\'2\' stroke-linecap=\'round\' stroke-linejoin=\'round\'><circle cx=\'12\' cy=\'12\' r=\'4\'/><path d=\'M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4\'/></svg>'
             : '<svg viewBox=\'0 0 24 24\' width=\'16\' height=\'16\' fill=\'none\' stroke=\'currentColor\' stroke-width=\'2\' stroke-linecap=\'round\' stroke-linejoin=\'round\'><path d=\'M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8Z\'/></svg>'"></span>
           <span>{{ isDark ? '浅色' : '深色' }}</span>
-          <span class="version">{{ appVersion }}</span>
+          <span v-if="!collapsed" class="version">{{ appVersion }}</span>
         </button>
       </div>
     </aside>
@@ -204,6 +247,16 @@ function onSpinEnd() {
     </main>
     <ToastHost />
     <QuickSearch />
+
+    <!-- 快捷键说明 -->
+    <BaseModal :open="showHelp" title="快捷键与操作技巧" width="440px" @close="showHelp = false">
+      <div class="help-list">
+        <div v-for="[k, desc] in helpRows" :key="k" class="help-row">
+          <span class="help-keys"><kbd>{{ k }}</kbd></span>
+          <span class="help-desc">{{ desc }}</span>
+        </div>
+      </div>
+    </BaseModal>
   </div>
 </template>
 
@@ -217,8 +270,41 @@ function onSpinEnd() {
   padding: 18px 12px;
   display: flex;
   flex-direction: column;
+  transition: width 0.25s var(--ease-out);
 }
-.brand { display: flex; align-items: center; gap: 9px; padding: 6px 10px 14px; }
+.sidebar.collapsed { width: 62px; padding-left: 8px; padding-right: 8px; }
+.sidebar.collapsed .type-switch-title,
+.sidebar.collapsed .nav-label,
+.sidebar.collapsed .nav-count,
+.sidebar.collapsed .theme-toggle span:nth-child(2),
+.sidebar.collapsed .version { display: none; }
+.sidebar.collapsed .brand { justify-content: center; flex-wrap: wrap; gap: 6px; }
+.sidebar.collapsed .type-btn,
+.sidebar.collapsed .nav-item { justify-content: center; padding-left: 0; padding-right: 0; }
+.sidebar.collapsed .nav-item { gap: 0; }
+.sidebar.collapsed .type-btn { gap: 0; }
+.sidebar.collapsed .type-btn span:last-child { display: none; }
+.sidebar.collapsed .theme-toggle { justify-content: center; }
+
+.collapse-btn {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  width: 22px;
+  height: 22px;
+  margin-left: auto;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.25s var(--ease-out), var(--transition);
+  padding: 0;
+}
+.collapse-btn:hover { background: var(--hover); color: var(--text); }
+.collapse-btn.flipped { transform: rotate(180deg); margin-left: 0; }
+
+.brand { display: flex; align-items: center; gap: 9px; padding: 6px 4px 14px; }
 .logo {
   font-size: 20px;
   color: #fff;
@@ -306,6 +392,17 @@ function onSpinEnd() {
   text-align: center;
   margin-bottom: 8px;
 }
+.kbd-hints.help-open {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-family: inherit;
+  width: 100%;
+  padding: 4px;
+  transition: var(--transition);
+}
+.kbd-hints.help-open:hover { color: var(--accent); }
+.sidebar.collapsed .kbd-hints kbd { margin: 0; }
 .kbd-hints kbd {
   display: inline-block;
   min-width: 16px;
@@ -316,6 +413,32 @@ function onSpinEnd() {
   background: var(--panel-2);
   font-family: inherit;
   font-size: 10px;
+  text-align: center;
+}
+
+.help-list { display: flex; flex-direction: column; }
+.help-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 9px 2px;
+  border-bottom: 1px dashed var(--line);
+  font-size: 13px;
+}
+.help-row:last-child { border-bottom: none; }
+.help-keys { flex-shrink: 0; }
+.help-desc { color: var(--text-2); }
+.help-keys kbd {
+  display: inline-block;
+  min-width: 18px;
+  padding: 2px 7px;
+  border: 1px solid var(--line-strong);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  background: var(--panel-2);
+  font-family: inherit;
+  font-size: 11px;
   text-align: center;
 }
 .theme-toggle {

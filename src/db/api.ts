@@ -197,6 +197,20 @@ export async function deletePrintJob(id: number): Promise<void> {
   await db.run('DELETE FROM print_jobs WHERE id = ?', [id])
 }
 
+// 单个作品的打印统计（次数 / 成功次数 / 累计耗材用量）
+export async function workPrintStats(
+  workId: number,
+): Promise<{ total: number; success: number; filament: number }> {
+  const r = await db.get<{ c: number; s: number; f: number }>(
+    `SELECT COUNT(*) AS c,
+            COALESCE(SUM(CASE WHEN result = 'success' THEN 1 ELSE 0 END), 0) AS s,
+            COALESCE(SUM(filament_used), 0) AS f
+     FROM print_jobs WHERE work_id = ?`,
+    [workId],
+  )
+  return { total: r?.c ?? 0, success: r?.s ?? 0, filament: r?.f ?? 0 }
+}
+
 // 本月打印统计：总次数与成功次数（按开始时间，缺省用结束时间）
 export async function monthPrintStats(): Promise<{ total: number; success: number }> {
   const d = new Date()
@@ -367,13 +381,18 @@ export async function fetchVideoStats(url: string): Promise<FetchedVideoStats> {
  * 每日自动抓取：抓取所有「今天尚未抓取过」且带链接的视频，写回数据并落 last_fetched。
  * 由主进程在启动 / 每日定时触发，也提供手动入口。
  */
-export async function refreshAllVideos(): Promise<number> {
+export async function refreshAllVideos(
+  onProgress?: (done: number, total: number) => void,
+): Promise<number> {
   const today = new Date().toISOString().slice(0, 10)
   const all = await listVideos()
+  const todo = all.filter(
+    (v): v is typeof all[number] & { url: string } =>
+      !!v.url && !(v.last_fetched && v.last_fetched.slice(0, 10) === today),
+  )
   let refreshed = 0
-  for (const v of all) {
-    if (!v.url) continue
-    if (v.last_fetched && v.last_fetched.slice(0, 10) === today) continue
+  let done = 0
+  for (const v of todo) {
     try {
       const s = await fetchVideoStats(v.url)
       await updateVideo(v.id, {
@@ -389,6 +408,8 @@ export async function refreshAllVideos(): Promise<number> {
     } catch {
       // 单条失败不影响其余（如视频下架 / 网络抖动），仅跳过
     }
+    done++
+    onProgress?.(done, todo.length)
   }
   return refreshed
 }

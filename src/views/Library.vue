@@ -11,6 +11,7 @@ import {
   typeLabel,
   listVideos,
   listSchedules,
+  workPrintStats,
   type Work,
   type WorkStatus,
   type Video,
@@ -114,6 +115,13 @@ const parentName = (id: number | null) => works.works.find((w) => w.id === id)?.
 
 function workColors(w: Work): string[] {
   return w.material_colors || []
+}
+
+// 打印类项目：缩略图用首个/末个关联色做渐变背景
+function thumbStyle(w: Work): Record<string, string> {
+  const cs = w.type === 'print' ? workColors(w) : []
+  if (!cs.length) return {}
+  return { background: `linear-gradient(135deg, ${cs[0]}, ${cs[cs.length - 1]})` }
 }
 
 // ---- 新建表单 ----
@@ -231,6 +239,15 @@ async function refreshVideos() {
   allVideos.value = await listVideos()
 }
 
+// 该项目的打印统计（仅 print 类型展示）
+const printStats = ref({ total: 0, success: 0, filament: 0 })
+const printRate = computed(() =>
+  printStats.value.total ? Math.round((printStats.value.success / printStats.value.total) * 100) : null,
+)
+async function loadPrintStats(id: number) {
+  printStats.value = await workPrintStats(id)
+}
+
 // 子项目完成进度
 const subWorks = computed(() =>
   works.works.filter((w) => w.parent_id === detail.value?.id),
@@ -244,6 +261,7 @@ function openDetail(w: Work) {
   detailId.value = w.id
   showPalette.value = false
   refreshVideos()
+  if (w.type === 'print') loadPrintStats(w.id)
 }
 async function patchDetail(p: Partial<Work>) {
   if (detailId.value == null) return
@@ -330,6 +348,34 @@ function ctxDelete() {
   closeCtx()
   if (w) askRemove(w)
 }
+
+// ---- 拖拽本地文件到卡片：快速设置源文件路径 ----
+const dragOverId = ref<number | null>(null)
+function onFileOver(w: Work, e: DragEvent) {
+  if (e.dataTransfer && [...e.dataTransfer.types].includes('Files')) {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'copy'
+    dragOverId.value = w.id
+  }
+}
+async function onDropFile(w: Work, e: DragEvent) {
+  dragOverId.value = null
+  const f = e.dataTransfer?.files?.[0]
+  if (!f) return
+  e.preventDefault()
+  let p = ''
+  try {
+    p = (window as any).app?.pathForFile?.(f) || ''
+  } catch {
+    p = ''
+  }
+  if (!p) {
+    toast.error('无法获取文件路径')
+    return
+  }
+  await works.patch(w.id, { source_path: p })
+  toast.success(`「${w.name}」源文件已设置为 ${f.name}`)
+}
 </script>
 
 <template>
@@ -387,11 +433,14 @@ function ctxDelete() {
         v-for="w in filtered"
         :key="w.id"
         class="card work-card"
-        :class="'s-' + w.status"
+        :class="['s-' + w.status, { 'file-over': dragOverId === w.id }]"
         @click="openDetail(w)"
         @contextmenu="openCtx($event, w)"
+        @dragover="onFileOver(w, $event)"
+        @dragleave="dragOverId === w.id && (dragOverId = null)"
+        @drop="onDropFile(w, $event)"
       >
-        <div class="thumb">
+        <div class="thumb" :style="thumbStyle(w)">
           <span>{{ w.name.slice(0, 1) }}</span>
           <span
             v-if="w.type === 'print' && workColors(w).length"
@@ -582,6 +631,11 @@ function ctxDelete() {
       <div v-if="detail.type === 'print'" class="inline-panel">
         <div class="panel-title">耗材关联（项目内调色盘）</div>
         <div class="panel-body">
+          <div v-if="printStats.total" class="print-stats">
+            共打印 <b>{{ printStats.total }}</b> 次 · 成功率
+            <b :style="{ color: (printRate ?? 0) >= 80 ? 'var(--green)' : (printRate ?? 0) >= 50 ? 'var(--orange)' : 'var(--red)' }">{{ printRate }}%</b>
+            <template v-if="printStats.filament"> · 累计耗材 <b>{{ printStats.filament }}</b> g</template>
+          </div>
           <div class="field">
             <span class="field-label">关联线材颜色</span>
             <div class="color-chips">
@@ -725,6 +779,21 @@ function ctxDelete() {
   box-shadow: var(--shadow-sm); transition: var(--transition);
 }
 .card:hover { box-shadow: var(--shadow-md); transform: translateY(-2px); border-color: var(--accent); }
+.card.file-over { border-color: var(--green); box-shadow: 0 0 0 2px var(--green-bg); }
+.card.file-over::after {
+  content: '松开以设置源文件';
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 10px;
+  background: var(--green);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 0;
+  border-radius: 7px;
+  text-align: center;
+}
 
 /* 悬停快捷操作条 */
 .quick { display: flex; align-items: center; gap: 6px; opacity: 0; transform: translateY(4px); transition: var(--transition); }
@@ -820,6 +889,8 @@ function ctxDelete() {
 .mini-link:hover { background: var(--accent-weak); border-color: var(--accent); text-decoration: none; }
 .vid-empty { font-size: 13px; margin: 0; }
 .meta-line { margin: 14px 2px 0; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.print-stats { font-size: 12px; color: var(--muted); padding: 8px 10px; background: var(--panel-2); border-radius: 8px; }
+.print-stats b { color: var(--text); font-variant-numeric: tabular-nums; }
 
 /* 右键菜单 */
 .ctx-backdrop { position: fixed; inset: 0; z-index: 1400; }

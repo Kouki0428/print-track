@@ -29,6 +29,7 @@ const form = ref({ work_id: '', url: '', published_at: '', views: '', likes: '',
 const fetchingId = ref<number | null>(null)
 const fetchingForm = ref(false)
 const refreshingAll = ref(false)
+const fetchProgress = ref<{ done: number; total: number } | null>(null)
 const lastRefresh = ref<string>('')
 // 可见的抓取状态（成功/失败原因），避免自动抓取静默吞错、手动抓取只弹一次 alert
 const fetchStatus = ref<{ kind: 'ok' | 'err' | 'idle'; text: string }>({ kind: 'idle', text: '' })
@@ -149,11 +150,14 @@ async function fetchIntoForm() {
   }
 }
 
-// 手动触发「每日自动抓取」全量刷新
+// 手动触发「每日自动抓取」全量刷新（带进度）
 async function refreshAll() {
   refreshingAll.value = true
+  fetchProgress.value = { done: 0, total: 0 }
   try {
-    const n = await refreshAllVideos()
+    const n = await refreshAllVideos((done, total) => {
+      fetchProgress.value = { done, total }
+    })
     lastRefresh.value = `${new Date().toLocaleString('zh-CN')}（更新 ${n} 条）`
     setStatus(n > 0 ? 'ok' : 'ok', n > 0 ? `已刷新 ${n} 条视频数据` : '没有需要更新的视频（或链接全部抓取失败，见下方状态）')
     await reload()
@@ -161,6 +165,7 @@ async function refreshAll() {
     setStatus('err', '刷新失败：' + (e?.message || e))
   } finally {
     refreshingAll.value = false
+    fetchProgress.value = null
   }
 }
 
@@ -258,7 +263,9 @@ async function doRemove() {
       <button class="btn ghost" :disabled="refreshingAll" @click="refreshAll">
         <span v-if="refreshingAll" class="spinner"></span>
         <span v-else>↻</span>
-        {{ refreshingAll ? '抓取中…' : '立即抓取全部' }}
+        {{ refreshingAll
+          ? `抓取中 ${fetchProgress?.total ? `${fetchProgress.done}/${fetchProgress.total}` : '…'}`
+          : '立即抓取全部' }}
       </button>
     </div>
     <div v-if="lastRefresh" class="last-refresh">上次手动刷新：{{ lastRefresh }}</div>

@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
 
 // 渲染端通过 window.db 访问，主进程统一代理 SQLite，保证 contextIsolation 安全
 contextBridge.exposeInMainWorld('db', {
@@ -13,6 +13,8 @@ contextBridge.exposeInMainWorld('app', {
   saveTheme: (t: string) => ipcRenderer.invoke('app:save-theme', t),
   exportCsv: (filename: string, csv: string) => ipcRenderer.invoke('app:export-csv', filename, csv),
   setCloseToTray: (v: boolean) => ipcRenderer.invoke('app:set-close-to-tray', v),
+  // 拖拽文件到窗口时取本地绝对路径（Electron 新版 File.path 已移除）
+  pathForFile: (file: File) => webUtils.getPathForFile(file),
 })
 
 // 视频链接抓取（仅哔哩哔哩）
