@@ -166,6 +166,11 @@ async function submitCreate() {
     toast.error('请填写项目名称')
     return
   }
+  if (works.works.some((w) => w.name === f.name.trim())) {
+    nameInvalid.value = true
+    toast.error('已存在同名项目，请换一个名称')
+    return
+  }
   // 选中「自定义」时，以手填内容作为类型；为空则归入「其它」
   const finalType =
     f.type === '__custom__' ? (customType.value.trim() || 'other') : f.type
@@ -246,6 +251,10 @@ async function setDetailStatus(e: Event) {
 async function renameDetail(e: Event) {
   const name = (e.target as HTMLInputElement).value.trim()
   if (!detail.value || !name || name === detail.value.name) return
+  if (works.works.some((w) => w.name === name && w.id !== detail.value!.id)) {
+    toast.error('已存在同名项目，请换一个名称')
+    return
+  }
   await patchDetail({ name })
   toast.success('项目名称已更新')
 }
@@ -592,6 +601,8 @@ async function doRemove() {
         </div>
       </div>
 
+      <p class="meta-line">创建于 {{ detail.created_at?.slice(0, 10) }} · 更新于 {{ detail.updated_at?.slice(0, 10) }}</p>
+
       <template #footer>
         <button class="btn danger ghost" @click="askRemove(detail)">删除项目</button>
         <button class="btn ghost" @click="detailId = null">关闭</button>
@@ -737,6 +748,7 @@ async function doRemove() {
 }
 .mini-link:hover { background: var(--accent-weak); border-color: var(--accent); text-decoration: none; }
 .vid-empty { font-size: 13px; margin: 0; }
+.meta-line { margin: 14px 2px 0; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
 
 .field.check { flex-direction: row; align-items: center; gap: 8px; }
 </style>

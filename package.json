@@ -13,6 +13,14 @@
     "rebuild": "electron-rebuild -f -w better-sqlite3",
     "dist": "npm run build && electron-builder"
   },
+  "build": {
+    "appId": "com.kouki.printtrack",
+    "productName": "PrintTrack",
+    "files": ["dist/**", "dist-electron/**", "assets/**", "package.json"],
+    "win": {
+      "target": "nsis"
+    }
+  },
   "dependencies": {
     "better-sqlite3": "^11.3.0",
     "pinia": "^2.2.2",

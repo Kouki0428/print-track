@@ -49,6 +49,14 @@ const countOf = (s: WorkStatus) => byStatusVisible.value[s].length
 
 const selected = computed(() => visibleWorks.value.find((w) => w.id === selectedId.value) || null)
 
+// 根据起止时间自动计算时长（小时）
+const jobDuration = computed(() => {
+  const { started_at, ended_at } = jobForm.value
+  if (!started_at || !ended_at) return ''
+  const h = (new Date(ended_at).getTime() - new Date(started_at).getTime()) / 3600000
+  return h > 0 ? h.toFixed(1) : ''
+})
+
 // ---- 拖拽换列：拖动卡片到目标状态列即可改状态 ----
 const dragId = ref<number | null>(null)
 const overCol = ref<WorkStatus | null>(null)
@@ -238,6 +246,7 @@ async function doRemoveJob() {
         <label class="field">备注
           <input v-model="jobForm.note" class="input" placeholder="可选" />
         </label>
+        <span v-if="jobDuration" class="dur-hint">时长 {{ jobDuration }} h</span>
         <button class="btn" style="align-self:flex-end" @click="addJob">+ 新增记录</button>
       </div>
 
@@ -328,4 +337,5 @@ async function doRemoveJob() {
 .mini { border: 1px solid var(--line); background: var(--panel-2); border-radius: 7px; padding: 4px 9px; font-size: 12px; cursor: pointer; transition: var(--transition); }
 .mini.danger { color: var(--red); border-color: var(--red-bg); }
 .mini.danger:hover { background: var(--red-bg); opacity: 1; }
+.dur-hint { font-size: 12px; color: var(--accent); background: var(--accent-weak); padding: 6px 10px; border-radius: 8px; font-weight: 600; align-self: flex-end; margin-bottom: 2px; white-space: nowrap; }
 </style>

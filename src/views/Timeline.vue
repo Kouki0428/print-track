@@ -105,6 +105,46 @@ function scrollToday() {
   const left = Math.max(0, 140 + todayIdx.value * COL_W - 260)
   tlEl.value.scrollTo({ left, behavior: 'smooth' })
 }
+// ---- 拖拽色条：整体平移排期日期（松开即保存）----
+const drag = ref<{ id: number; startX: number; days: number } | null>(null)
+let justDragged = false
+
+function shiftDate(dateStr: string | null, days: number): string | null {
+  if (!dateStr) return null
+  return new Date(new Date(dateStr).getTime() + days * 86400000).toISOString().slice(0, 10)
+}
+
+function onBarDown(s: Schedule, e: PointerEvent) {
+  if (e.button !== 0) return
+  e.preventDefault()
+  ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+  drag.value = { id: s.id, startX: e.clientX, days: 0 }
+}
+function onBarMove(e: PointerEvent) {
+  const d = drag.value
+  if (d) d.days = Math.round((e.clientX - d.startX) / COL_W)
+}
+async function onBarUp(s: Schedule) {
+  const d = drag.value
+  drag.value = null
+  if (!d || !d.days) return // 未移动视为点击 → 走 click 打开编辑
+  justDragged = true
+  await updateSchedule(s.id, {
+    planned_start: shiftDate(s.planned_start, d.days),
+    planned_end: shiftDate(s.planned_end, d.days),
+  })
+  await recomputeOverdue()
+  await reload()
+  toast.success(`已${d.days > 0 ? '后延' : '前移'} ${Math.abs(d.days)} 天`)
+}
+
+// 拖拽中的视觉位移
+function dragStyle(s: Schedule): Record<string, string> {
+  const d = drag.value
+  if (d?.id === s.id && d.days !== 0) return { transform: `translateX(${d.days * COL_W}px)` }
+  return {}
+}
+
 function openCreate() {
   editingId.value = null
   form.value = { work_id: '', planned_start: todayIso, planned_end: '', priority: '0', note: '' }
@@ -113,6 +153,11 @@ function openCreate() {
 
 // 编辑已有排期（点击色条或「编」按钮进入）
 function openEdit(s: Schedule) {
+  if (justDragged) {
+    // 这次 click 是拖拽结束的附带事件，忽略
+    justDragged = false
+    return
+  }
   editingId.value = s.id
   form.value = {
     work_id: String(s.work_id),
@@ -187,7 +232,7 @@ async function doRemove() {
     <div class="page-head">
       <div>
         <h1 class="page-title">时间线 / 排期</h1>
-        <p class="subtitle">按周视图排期，超期项目自动标红 · 点击色条或「编」可修改排期</p>
+        <p class="subtitle">按周视图排期，超期自动标红 · 拖动色条整体平移，点击色条或「编」可修改</p>
       </div>
       <div class="row">
         <button class="btn" @click="openCreate">+ 新增排期</button>
@@ -226,9 +271,12 @@ async function doRemove() {
             <div
               v-if="s.planned_start"
               class="bar grow-x"
-              :class="[ 'p' + (s.priority ?? 0), { overdue: scheduleOverdue(s) } ]"
-              :style="{ left: dayIndex(s.planned_start) * COL_W + 'px', width: spanDays(s) * COL_W - 3 + 'px' }"
-              :title="`${workName(s.work_id)} · ${s.planned_start}${s.planned_end ? ' ~ ' + s.planned_end : ''}${s.note ? ' · ' + s.note : ''}（点击编辑）`"
+              :class="[ 'p' + (s.priority ?? 0), { overdue: scheduleOverdue(s), dragging: drag?.id === s.id && drag.days !== 0 } ]"
+              :style="{ left: dayIndex(s.planned_start) * COL_W + 'px', width: spanDays(s) * COL_W - 3 + 'px', ...dragStyle(s) }"
+              :title="`${workName(s.work_id)} · ${s.planned_start}${s.planned_end ? ' ~ ' + s.planned_end : ''}${s.note ? ' · ' + s.note : ''}（拖动平移 / 点击编辑）`"
+              @pointerdown="onBarDown(s, $event)"
+              @pointermove="onBarMove"
+              @pointerup="onBarUp(s)"
               @click="openEdit(s)"
             >
               <span class="bar-text">{{ workName(s.work_id) }}</span>
@@ -323,7 +371,8 @@ async function doRemove() {
   border-radius: 2px;
   pointer-events: none;
 }
-.bar { position: absolute; top: 4px; height: 24px; border-radius: 7px; display: flex; align-items: center; padding: 0 8px; color: #fff; font-size: 12px; overflow: hidden; white-space: nowrap; box-shadow: var(--shadow-sm); transition: filter 0.2s ease, transform 0.2s ease; cursor: pointer; }
+.bar { position: absolute; top: 4px; height: 24px; border-radius: 7px; display: flex; align-items: center; padding: 0 8px; color: #fff; font-size: 12px; overflow: hidden; white-space: nowrap; box-shadow: var(--shadow-sm); transition: filter 0.2s ease; cursor: grab; touch-action: none; user-select: none; }
+.bar.dragging { opacity: 0.75; cursor: grabbing; z-index: 2; box-shadow: var(--shadow-md); }
 .srow:hover .bar { filter: brightness(1.08); transform: translateY(-1px); }
 .p2 { background: linear-gradient(135deg, #e23c3c, #f06464); }
 .p1 { background: linear-gradient(135deg, #e8912f, #f0a44f); }

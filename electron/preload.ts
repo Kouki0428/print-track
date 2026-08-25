@@ -12,6 +12,7 @@ contextBridge.exposeInMainWorld('app', {
   backupDatabase: () => ipcRenderer.invoke('app:backup-db'),
   saveTheme: (t: string) => ipcRenderer.invoke('app:save-theme', t),
   exportCsv: (filename: string, csv: string) => ipcRenderer.invoke('app:export-csv', filename, csv),
+  setCloseToTray: (v: boolean) => ipcRenderer.invoke('app:set-close-to-tray', v),
 })
 
 // 视频链接抓取（仅哔哩哔哩）

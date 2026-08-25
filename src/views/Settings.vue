@@ -8,6 +8,16 @@ const toast = useToast()
 const counts = ref({ works: 0, prints: 0, videos: 0, schedules: 0, byType: {} as Record<string, number> })
 const backingUp = ref(false)
 
+// 关闭到托盘（UI 状态镜像 localStorage，主进程为行为源头）
+const closeToTray = ref(localStorage.getItem('printtrack-close-tray') === '1')
+function toggleCloseToTray(e: Event) {
+  const v = (e.target as HTMLInputElement).checked
+  closeToTray.value = v
+  localStorage.setItem('printtrack-close-tray', v ? '1' : '0')
+  ;(window as any).app?.setCloseToTray?.(v)
+  toast.success(v ? '已开启：关闭窗口将最小化到系统托盘' : '已关闭：退出应用')
+}
+
 async function reload() {
   const w = await listWorks()
   const v = await listVideos()
@@ -88,6 +98,42 @@ async function exportCsv() {
     exporting.value = false
   }
 }
+
+// 导出打印记录 CSV（含作品名，便于月度盘点）
+const exportingJobs = ref(false)
+async function exportJobsCsv() {
+  exportingJobs.value = true
+  try {
+    const rows = await db.query<Record<string, unknown>>(
+      `SELECT p.result, p.filament_used, p.started_at, p.ended_at, p.note, w.name AS work_name
+       FROM print_jobs p LEFT JOIN works w ON w.id = p.work_id
+       ORDER BY p.id DESC`,
+    )
+    const header = ['作品', '结果', '用量(g)', '开始时间', '结束时间', '备注']
+    const lines = rows.map((r) =>
+      [
+        r.work_name ?? '',
+        r.result === 'success' ? '成功' : '失败',
+        r.filament_used ?? '',
+        String(r.started_at ?? '').replace('T', ' '),
+        String(r.ended_at ?? '').replace('T', ' '),
+        r.note ?? '',
+      ]
+        .map(csvCell)
+        .join(','),
+    )
+    const csv = [header.join(','), ...lines].join('\r\n')
+    const r2 = await (window as any).app?.exportCsv?.(
+      `print-track-打印记录-${new Date().toISOString().slice(0, 10)}.csv`,
+      csv,
+    )
+    if (r2?.ok) toast.success('已导出到：' + r2.path)
+  } catch (e: any) {
+    toast.error('导出失败：' + (e?.message || e))
+  } finally {
+    exportingJobs.value = false
+  }
+}
 </script>
 
 <template>
@@ -105,6 +151,10 @@ async function exportCsv() {
           <button :class="{ on: themePref === 'system' }" @click="setThemePref('system' as ThemePref)">跟随系统</button>
         </div>
       </div>
+      <label class="row tray-row">
+        <input type="checkbox" :checked="closeToTray" @change="toggleCloseToTray" />
+        <span>关闭窗口时最小化到系统托盘（从托盘图标退出）</span>
+      </label>
     </div>
 
     <div class="card">
@@ -115,6 +165,7 @@ async function exportCsv() {
         <button class="btn ghost" @click="openFolder">打开数据目录</button>
         <button class="btn ghost" :disabled="backingUp" @click="backupDb">{{ backingUp ? '备份中…' : '备份数据库' }}</button>
         <button class="btn ghost" :disabled="exporting" @click="exportCsv">{{ exporting ? '导出中…' : '导出项目 CSV' }}</button>
+        <button class="btn ghost" :disabled="exportingJobs" @click="exportJobsCsv">{{ exportingJobs ? '导出中…' : '导出打印记录 CSV' }}</button>
       </div>
     </div>
 
@@ -171,4 +222,6 @@ async function exportCsv() {
 .seg button { border: none; background: var(--panel); color: var(--text-2); padding: 7px 16px; font-size: 13px; cursor: pointer; transition: var(--transition); }
 .seg button:hover { color: var(--text); background: var(--hover); }
 .seg button.on { background: var(--accent); color: #fff; }
+.tray-row { margin-top: 12px; cursor: pointer; font-size: 13px; color: var(--text-2); gap: 8px; }
+.tray-row input { accent-color: var(--accent); width: 15px; height: 15px; }
 </style>

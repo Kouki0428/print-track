@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, shell } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog, shell, Tray, Menu, nativeImage } from 'electron'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import fs from 'node:fs'
@@ -28,14 +28,54 @@ async function initDb(): Promise<void> {
   }
 }
 
-// 读取用户主题偏好（渲染端切主题时经 IPC 写入），用于窗口创建时设定背景色，避免深色用户闪白
-function readThemePref(): 'light' | 'dark' {
+// ---- UI 偏好（ui-pref.json：主题 / 关闭到托盘等，主进程与渲染端共享）----
+function readUiPref(): Record<string, unknown> {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(app.getPath('userData'), 'ui-pref.json'), 'utf8')) || {}
+  } catch {
+    return {}
+  }
+}
+function writeUiPref(patch: Record<string, unknown>) {
   try {
     const p = path.join(app.getPath('userData'), 'ui-pref.json')
-    return JSON.parse(fs.readFileSync(p, 'utf8'))?.theme === 'dark' ? 'dark' : 'light'
+    fs.writeFileSync(p, JSON.stringify({ ...readUiPref(), ...patch }), 'utf8')
   } catch {
-    return 'light'
+    // 写入失败不影响功能
   }
+}
+
+// 读取用户主题偏好（决定窗口背景色），避免深色用户启动闪白
+function readThemePref(): 'light' | 'dark' {
+  return readUiPref().theme === 'dark' ? 'dark' : 'light'
+}
+
+// ---- 托盘最小化 ----
+let tray: Tray | null = null
+let closeToTray = false
+
+function ensureTray(win: BrowserWindow) {
+  if (tray) return
+  const icon = nativeImage.createFromPath(path.join(__dirname, '../assets/tray.png'))
+  tray = new Tray(icon)
+  tray.setToolTip('PrintTrack · 点击图标恢复窗口')
+  tray.setContextMenu(
+    Menu.buildFromTemplate([
+      {
+        label: '显示主窗口',
+        click: () => {
+          win.show()
+          win.focus()
+        },
+      },
+      { type: 'separator' },
+      { label: '退出', click: () => app.quit() },
+    ]),
+  )
+  tray.on('double-click', () => {
+    win.show()
+    win.focus()
+  })
 }
 
 function createWindow(): void {
@@ -81,6 +121,14 @@ function createWindow(): void {
     if (/^https?:\/\//i.test(url)) shell.openExternal(url)
     return { action: 'deny' }
   })
+
+  // 开启「关闭到托盘」时：点关闭 = 隐藏窗口（真正退出走托盘菜单的退出）
+  win.on('close', (e) => {
+    if (closeToTray && !appQuiting) {
+      e.preventDefault()
+      win.hide()
+    }
+  })
 }
 
 // ---- IPC：数据库代理（所有 SQL 经由主进程执行，渲染端不直连 better-sqlite3）----
@@ -101,6 +149,12 @@ ipcMain.handle('db:get', (_e, sql: string, params: unknown[] = []) => {
 // 未捕获异常弹窗，避免「静默无界面」
 process.on('uncaughtException', (err) => {
   dialog.showErrorBox('未捕获错误', String(err))
+})
+
+// 真正退出标记：托盘隐藏模式下 before-quit 时放行 close 事件
+let appQuiting = false
+app.on('before-quit', () => {
+  appQuiting = true
 })
 
 // 打开数据目录（设置页使用）
@@ -128,11 +182,16 @@ ipcMain.handle('app:backup-db', async () => {
 
 // 主题偏好持久化（主进程读它决定窗口背景色）
 ipcMain.handle('app:save-theme', (_e, t: string) => {
-  try {
-    const p = path.join(app.getPath('userData'), 'ui-pref.json')
-    fs.writeFileSync(p, JSON.stringify({ theme: t === 'dark' ? 'dark' : 'light' }), 'utf8')
-  } catch {
-    // 写入失败不影响功能
+  writeUiPref({ theme: t === 'dark' ? 'dark' : 'light' })
+})
+
+// 关闭到托盘开关（渲染端设置页控制）
+ipcMain.handle('app:set-close-to-tray', (e, v: boolean) => {
+  closeToTray = !!v
+  writeUiPref({ closeToTray: closeToTray })
+  if (closeToTray) {
+    const win = BrowserWindow.fromWebContents(e.sender)
+    if (win) ensureTray(win)
   }
 })
 
@@ -185,7 +244,12 @@ async function dailyRefresh(): Promise<void> {
 
 app.whenReady().then(async () => {
   await initDb()
+  closeToTray = !!readUiPref().closeToTray
   createWindow()
+  if (closeToTray) {
+    const win = BrowserWindow.getAllWindows()[0]
+    if (win) ensureTray(win)
+  }
   await dailyRefresh()
   // 每日自动抓取：24h 周期，避免阻塞启动
   setInterval(dailyRefresh, 24 * 60 * 60 * 1000)
