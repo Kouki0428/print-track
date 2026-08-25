@@ -282,7 +282,7 @@ function onSpinEnd() {
   transition: width 0.3s var(--ease-out);
 }
 .sidebar.collapsed { width: 62px; padding-left: 10px; padding-right: 10px; }
-.sidebar.collapsed .brand { flex-direction: column; align-items: center; gap: 6px; padding: 6px 0 0; }
+.sidebar.collapsed .brand { flex-direction: column; align-items: flex-start; gap: 6px; padding: 6px 4px 0; }
 .sidebar.collapsed .collapse-btn { margin-left: 0; }
 .sidebar.collapsed .brand-name { position: absolute; opacity: 0; }
 /* 防止图标被 flex 压缩：图标固定不缩，文字标签可收缩并被裁切 */
