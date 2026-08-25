@@ -283,7 +283,10 @@ function onSpinEnd() {
 }
 .sidebar.collapsed { width: 62px; padding-left: 10px; padding-right: 10px; }
 .sidebar.collapsed .brand { flex-direction: column; align-items: flex-start; gap: 6px; padding: 6px 4px 0; }
-.sidebar.collapsed .collapse-btn { margin-left: 0; }
+.sidebar.collapsed .logo { margin-left: 2px; }
+.sidebar.collapsed .collapse-btn { margin-left: 3px; }
+.sidebar.collapsed .type-btn > span:first-child { margin-left: 3.5px; }
+.sidebar.collapsed .theme-toggle > span:first-child { margin-left: 1px; }
 .sidebar.collapsed .brand-name { position: absolute; opacity: 0; }
 /* 防止图标被 flex 压缩：图标固定不缩，文字标签可收缩并被裁切 */
 .nav-icon,
