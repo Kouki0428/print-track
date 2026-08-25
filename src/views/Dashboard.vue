@@ -239,7 +239,7 @@ function shortDate(d: string): string {
           </div>
         </div>
         <ul v-if="recent.length" class="feed">
-          <li v-for="j in recent" :key="j.id">
+          <li v-for="j in recent" :key="j.id" class="feed-row" title="打开该项目详情" @click="router.push(`/library?work=${j.work_id}`)">
             <span class="feed-name">{{ j.work_name }}</span>
             <span class="badge" :class="j.result === 'success' ? 'ok' : 'bad'">
               {{ j.result === 'success' ? '成功' : '失败' }}
@@ -291,6 +291,8 @@ function shortDate(d: string): string {
 
 .feed { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; }
 .feed li { display: flex; align-items: center; gap: 10px; font-size: 14px; }
+.feed-row { padding: 4px 8px; margin: 0 -8px; border-radius: 9px; cursor: pointer; transition: var(--transition); }
+.feed-row:hover { background: var(--hover); }
 .feed-name { flex: 1; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .feed-time { color: var(--muted); font-size: 12px; }
 .badge.ok { color: var(--green); background: var(--green-bg); }

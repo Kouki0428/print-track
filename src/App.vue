@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
-import { onMounted, onUnmounted, computed, ref } from 'vue'
+import { onMounted, onUnmounted, computed, ref, watch } from 'vue'
 import { useWorksStore } from '@/stores/works'
 import { useUiStore } from '@/stores/ui'
 import { typeLabel } from '@/db/api'
@@ -15,6 +15,24 @@ const ui = useUiStore()
 onMounted(() => works.fetchAll())
 
 const isDark = computed(() => theme.value === 'dark')
+
+// 窗口标题跟随当前页面
+const pageTitle: Record<string, string> = {
+  '/dashboard': '仪表盘',
+  '/library': '作品库',
+  '/board': '进度板',
+  '/timeline': '时间线',
+  '/videos': '视频统计',
+  '/settings': '设置',
+}
+watch(
+  () => route.path,
+  (p) => {
+    const key = Object.keys(pageTitle).find((k) => p.startsWith(k))
+    document.title = key ? `${pageTitle[key]} · PrintTrack` : 'PrintTrack'
+  },
+  { immediate: true },
+)
 
 const appVersion = __APP_VERSION__
 

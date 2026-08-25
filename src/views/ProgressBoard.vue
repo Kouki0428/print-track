@@ -34,6 +34,12 @@ const selectedId = ref<number | null>(null)
 const jobs = ref<PrintJob[]>([])
 const jobForm = ref({ result: 'success', filament_used: '', note: '', started_at: '', ended_at: '' })
 
+// 打印记录结果筛选
+const jobFilter = ref<'all' | 'success' | 'failed'>('all')
+const filteredJobs = computed(() =>
+  jobFilter.value === 'all' ? jobs.value : jobs.value.filter((j) => j.result === jobFilter.value),
+)
+
 // 仅展示当前类型过滤下的项目
 const visibleWorks = computed(() =>
   works.works.filter((w) => ui.typeFilter === 'all' || w.type === ui.typeFilter),
@@ -253,12 +259,25 @@ async function doRemoveJob() {
         <button class="btn" style="align-self:flex-end" @click="addJob">+ 新增记录</button>
       </div>
 
-      <table v-if="jobs.length" class="table jobs">
+      <div class="jobs-head">
+        <span class="jobs-title">打印记录</span>
+        <div class="job-chips">
+          <button
+            v-for="f in (['all', 'success', 'failed'] as const)"
+            :key="f"
+            class="job-chip"
+            :class="{ on: jobFilter === f }"
+            @click="jobFilter = f"
+          >{{ f === 'all' ? '全部' : f === 'success' ? '成功' : '失败' }}</button>
+        </div>
+      </div>
+
+      <table v-if="filteredJobs.length" class="table jobs">
         <thead>
           <tr><th>结果</th><th>用量(g)</th><th>开始</th><th>结束</th><th>备注</th><th></th></tr>
         </thead>
         <tbody>
-          <tr v-for="j in jobs" :key="j.id">
+          <tr v-for="j in filteredJobs" :key="j.id">
             <td>
               <span class="badge" :class="j.result === 'success' ? 'ok' : 'bad'">
                 {{ j.result === 'success' ? '成功' : '失败' }}
@@ -274,7 +293,9 @@ async function doRemoveJob() {
           </tr>
         </tbody>
       </table>
-      <p v-else class="muted" style="font-size:13px">该作品暂无打印记录。</p>
+      <p v-else class="muted" style="font-size:13px">
+        {{ jobs.length ? '该状态下暂无记录，试试切换筛选。' : '该作品暂无打印记录。' }}
+      </p>
       </div>
     </Transition>
 
@@ -345,4 +366,19 @@ async function doRemoveJob() {
 .end-row .input { flex: 1; min-width: 0; }
 .now-btn { white-space: nowrap; opacity: 0.75; }
 .now-btn:hover { opacity: 1; border-color: var(--accent); color: var(--accent); }
+.jobs-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.jobs-title { font-weight: 700; font-size: 14px; }
+.job-chips { display: flex; gap: 6px; }
+.job-chip {
+  padding: 3px 11px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--text-2);
+  font-size: 12px;
+  cursor: pointer;
+  transition: var(--transition);
+}
+.job-chip:hover { background: var(--hover); }
+.job-chip.on { background: var(--accent); border-color: var(--accent); color: #fff; }
 </style>

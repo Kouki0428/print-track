@@ -44,6 +44,13 @@ onMounted(async () => {
 })
 
 // 每个项目的最近截止日徽章（14 天内或已逾期才显示）
+const subCount = computed(() => {
+  const m = new Map<number, number>()
+  for (const w of works.works) {
+    if (w.parent_id) m.set(w.parent_id, (m.get(w.parent_id) || 0) + 1)
+  }
+  return m
+})
 const dueChips = computed(() => {
   const map = new Map<number, { text: string; cls: string }>()
   const today = new Date()
@@ -288,6 +295,41 @@ async function doRemove() {
   removeTarget.value = null
   toast.success(`已删除「${w.name}」`)
 }
+
+// ---- 卡片右键菜单 ----
+const ctxMenu = ref<{ x: number; y: number; work: Work } | null>(null)
+function openCtx(e: MouseEvent, w: Work) {
+  e.preventDefault()
+  ctxMenu.value = {
+    x: Math.min(e.clientX, window.innerWidth - 190),
+    y: Math.min(e.clientY, window.innerHeight - 140),
+    work: w,
+  }
+}
+function closeCtx() {
+  ctxMenu.value = null
+}
+function ctxEdit() {
+  const w = ctxMenu.value?.work
+  closeCtx()
+  if (w) openDetail(w)
+}
+async function ctxCopyName() {
+  const w = ctxMenu.value?.work
+  closeCtx()
+  if (!w) return
+  try {
+    await navigator.clipboard.writeText(w.name)
+    toast.success('名称已复制到剪贴板')
+  } catch {
+    toast.error('复制失败')
+  }
+}
+function ctxDelete() {
+  const w = ctxMenu.value?.work
+  closeCtx()
+  if (w) askRemove(w)
+}
 </script>
 
 <template>
@@ -347,6 +389,7 @@ async function doRemove() {
         class="card work-card"
         :class="'s-' + w.status"
         @click="openDetail(w)"
+        @contextmenu="openCtx($event, w)"
       >
         <div class="thumb">
           <span>{{ w.name.slice(0, 1) }}</span>
@@ -370,6 +413,7 @@ async function doRemove() {
           </div>
           <div class="tags">
             <span class="tag type">{{ typeLabel(w.type) }}</span>
+            <span v-if="subCount.get(w.id)" class="tag">含 {{ subCount.get(w.id) }} 子项</span>
             <span v-if="w.design_app" class="tag">{{ w.design_app }}</span>
             <span v-if="w.type === 'print' && w.material_weight" class="tag">{{ w.material_weight }}g</span>
             <span v-if="w.type === 'print' && w.print_hours" class="tag">{{ w.print_hours }}h</span>
@@ -623,6 +667,28 @@ async function doRemove() {
       @cancel="confirmRemove = false"
       @confirm="doRemove"
     />
+
+    <!-- 卡片右键菜单 -->
+    <Teleport to="body">
+      <Transition name="fade">
+        <div v-if="ctxMenu" class="ctx-backdrop" @click="closeCtx" @contextmenu.prevent="closeCtx">
+          <div class="ctx-menu" :style="{ left: ctxMenu.x + 'px', top: ctxMenu.y + 'px' }">
+            <button @click.stop="ctxEdit">
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+              编辑 / 详情
+            </button>
+            <button @click.stop="ctxCopyName">
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              复制名称
+            </button>
+            <button class="danger" @click.stop="ctxDelete">
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>
+              删除项目
+            </button>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
@@ -754,6 +820,38 @@ async function doRemove() {
 .mini-link:hover { background: var(--accent-weak); border-color: var(--accent); text-decoration: none; }
 .vid-empty { font-size: 13px; margin: 0; }
 .meta-line { margin: 14px 2px 0; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* 右键菜单 */
+.ctx-backdrop { position: fixed; inset: 0; z-index: 1400; }
+.ctx-menu {
+  position: fixed;
+  min-width: 170px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: var(--shadow-lg);
+  padding: 5px;
+  display: flex;
+  flex-direction: column;
+}
+.ctx-menu button {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  transition: var(--transition);
+}
+.ctx-menu button:hover { background: var(--hover); }
+.ctx-menu button.danger { color: var(--red); }
+.ctx-menu button.danger:hover { background: var(--red-bg); }
 
 .field.check { flex-direction: row; align-items: center; gap: 8px; }
 </style>

@@ -107,9 +107,9 @@ function workName(id: number): string {
   return works.value.find((w) => w.id === id)?.name || `#${id}`
 }
 
-// 手动抓取单条
+// 手动抓取单条（全量刷新进行中时禁止重复触发）
 async function refreshOne(v: Video) {
-  if (!v.url) return
+  if (!v.url || refreshingAll.value) return
   fetchingId.value = v.id
   try {
     const s = await fetchVideoStats(v.url)

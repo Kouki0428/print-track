@@ -114,6 +114,28 @@ function shiftDate(dateStr: string | null, days: number): string | null {
   return new Date(new Date(dateStr).getTime() + days * 86400000).toISOString().slice(0, 10)
 }
 
+// 本地日期转 YYYY-MM-DD（避免 toISOString 的时区偏移）
+function toLocalIso(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+}
+
+// 点击轨道空白处：以该行为作品、点击处为开始日，快速新建排期
+function onTrackClick(s: Schedule, e: MouseEvent) {
+  if ((e.target as HTMLElement).closest('.bar')) return
+  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+  const idx = Math.max(0, Math.floor((e.clientX - rect.left) / COL_W))
+  editingId.value = null
+  form.value = {
+    work_id: String(s.work_id),
+    planned_start: shiftDate(toLocalIso(base.value), idx) || todayIso,
+    planned_end: '',
+    priority: '0',
+    note: '',
+  }
+  showModal.value = true
+}
+
 function onBarDown(s: Schedule, e: PointerEvent) {
   if (e.button !== 0) return
   e.preventDefault()
@@ -271,7 +293,12 @@ async function doRemove() {
             title="打开作品库详情"
             @click="router.push(`/library?work=${s.work_id}`)"
           >{{ workName(s.work_id) }}</div>
-          <div class="track" :style="{ width: totalDays * COL_W + 'px' }">
+          <div
+            class="track"
+            :style="{ width: totalDays * COL_W + 'px' }"
+            title="点击空白处在此行新建排期"
+            @click="onTrackClick(s, $event)"
+          >
             <div class="weekend-layer"></div>
             <div v-if="todayIdx >= 0" class="today-line" :style="{ left: todayIdx * COL_W + COL_W / 2 - 1 + 'px' }"></div>
             <div
@@ -367,7 +394,7 @@ async function doRemove() {
 .sname { width: 140px; flex-shrink: 0; font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-left: 6px; cursor: pointer; }
 .sname:hover { color: var(--accent); text-decoration: underline; }
 .sname.overdue { color: var(--red); }
-.track { position: relative; height: 32px; flex-shrink: 0; }
+.track { position: relative; height: 32px; flex-shrink: 0; cursor: cell; }
 .weekend-layer {
   position: absolute;
   inset: -2px 0;
