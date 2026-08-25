@@ -193,6 +193,13 @@ export async function listPrintJobs(workId: number): Promise<PrintJob[]> {
   return db.query<PrintJob>('SELECT * FROM print_jobs WHERE work_id = ? ORDER BY id DESC', [workId])
 }
 
+// 各作品打印次数聚合（作品卡片徽章用）
+export async function printJobCounts(): Promise<{ work_id: number; c: number }[]> {
+  return db.query<{ work_id: number; c: number }>(
+    'SELECT work_id, COUNT(*) AS c FROM print_jobs GROUP BY work_id',
+  )
+}
+
 export async function deletePrintJob(id: number): Promise<void> {
   await db.run('DELETE FROM print_jobs WHERE id = ?', [id])
 }

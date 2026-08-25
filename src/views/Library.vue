@@ -12,6 +12,7 @@ import {
   listVideos,
   listSchedules,
   workPrintStats,
+  printJobCounts,
   type Work,
   type WorkStatus,
   type Video,
@@ -30,11 +31,14 @@ const toast = useToast()
 
 // 排期数据：用于卡片上的截止日徽章
 const schedules = ref<Schedule[]>([])
+// 各项目打印次数：卡片徽章
+const jobCounts = ref(new Map<number, number>())
 
 // 支持 ?new=1（直接打开新建）与 ?work=ID（直接打开详情）深链
 onMounted(async () => {
   await works.fetchAll()
   schedules.value = await listSchedules()
+  jobCounts.value = new Map((await printJobCounts()).map((r) => [r.work_id, r.c]))
   if (route.query.new) openCreate()
   const qw = Array.isArray(route.query.work) ? route.query.work[0] : route.query.work
   const wid = qw != null ? Number(qw) : NaN
@@ -170,6 +174,12 @@ watch(
     if (!createOpen.value && !detailId.value) openCreate()
   },
 )
+
+// 一键清除搜索与状态筛选
+function clearFilters() {
+  keyword.value = ''
+  statusFilter.value = 'all'
+}
 // 新建表单内按 Enter 直接提交（仅对输入框生效）
 function onFormEnter(e: KeyboardEvent) {
   const t = e.target as HTMLElement
@@ -277,6 +287,21 @@ async function setDetailStatus(e: Event) {
   toast.success(`「${name}」已标记为「${STATUS_LABELS[s]}」`)
 }
 
+// 一键流转到下一状态（筹划→设计→制作→完成）
+const FLOW: WorkStatus[] = ['planning', 'designing', 'making', 'done']
+const nextStatus = computed<WorkStatus | null>(() => {
+  if (!detail.value) return null
+  const i = FLOW.indexOf(detail.value.status)
+  return i >= 0 && i < FLOW.length - 1 ? FLOW[i + 1] : null
+})
+async function advanceStatus() {
+  if (!detail.value || !nextStatus.value) return
+  const s = nextStatus.value
+  const name = detail.value.name
+  await patchDetail({ status: s })
+  toast.success(`「${name}」已流转到「${STATUS_LABELS[s]}」`)
+}
+
 // 详情内改名
 async function renameDetail(e: Event) {
   const name = (e.target as HTMLInputElement).value.trim()
@@ -308,10 +333,18 @@ async function doRemove() {
   const w = removeTarget.value
   if (!w) return
   confirmRemove.value = false
+  removeTarget.value = null
   await works.remove(w.id)
   if (detailId.value === w.id) detailId.value = null
-  removeTarget.value = null
-  toast.success(`已删除「${w.name}」`)
+  // 6 秒内可撤销（恢复为新建，原 id 不保留）
+  toast.success(`已删除「${w.name}」`, {
+    label: '撤销',
+    run: async () => {
+      const { id: _omit, ...rest } = w
+      await works.add(rest)
+      toast.success(`已恢复「${w.name}」`)
+    },
+  })
 }
 
 // ---- 卡片右键菜单 ----
@@ -463,6 +496,7 @@ async function onDropFile(w: Work, e: DragEvent) {
           <div class="tags">
             <span class="tag type">{{ typeLabel(w.type) }}</span>
             <span v-if="subCount.get(w.id)" class="tag">含 {{ subCount.get(w.id) }} 子项</span>
+            <span v-if="jobCounts.get(w.id)" class="tag">打 {{ jobCounts.get(w.id) }} 次</span>
             <span v-if="w.design_app" class="tag">{{ w.design_app }}</span>
             <span v-if="w.type === 'print' && w.material_weight" class="tag">{{ w.material_weight }}g</span>
             <span v-if="w.type === 'print' && w.print_hours" class="tag">{{ w.print_hours }}h</span>
@@ -498,6 +532,7 @@ async function onDropFile(w: Work, e: DragEvent) {
       :desc="works.works.length ? '试试调整搜索或筛选条件。' : '点击下方「新建项目」开始记录第一个项目。'"
     >
       <button v-if="!works.works.length" class="btn" @click="openCreate">+ 新建项目</button>
+      <button v-else class="btn ghost" @click="clearFilters">清除搜索与筛选</button>
     </EmptyState>    <!-- 新建项目 -->
     <BaseModal :open="createOpen" title="新建项目" width="600px" @close="createOpen = false">
       <div class="form-grid" @keydown.enter="onFormEnter">
@@ -609,9 +644,19 @@ async function onDropFile(w: Work, e: DragEvent) {
           <input :value="detail.name" class="input" @change="renameDetail" />
         </label>
         <label class="field">状态
-          <select :value="detail.status" class="select" @change="setDetailStatus">
-            <option v-for="(label, key) in STATUS_LABELS" :key="key" :value="key">{{ label }}</option>
-          </select>
+          <div class="status-row">
+            <select :value="detail.status" class="select" @change="setDetailStatus">
+              <option v-for="(label, key) in STATUS_LABELS" :key="key" :value="key">{{ label }}</option>
+            </select>
+            <button
+              v-if="nextStatus"
+              class="next-btn"
+              :title="`流转到「${STATUS_LABELS[nextStatus]}」`"
+              @click="advanceStatus"
+            >
+              → {{ STATUS_LABELS[nextStatus] }}
+            </button>
+          </div>
         </label>
         <label class="field">软件 / 引擎
           <input :value="detail.design_app || ''" class="input" @change="patchDetail({ design_app: ($event.target as HTMLInputElement).value || null })" />
@@ -889,6 +934,21 @@ async function onDropFile(w: Work, e: DragEvent) {
 .mini-link:hover { background: var(--accent-weak); border-color: var(--accent); text-decoration: none; }
 .vid-empty { font-size: 13px; margin: 0; }
 .meta-line { margin: 14px 2px 0; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.status-row { display: flex; gap: 6px; align-items: center; }
+.status-row .select { flex: 1; min-width: 0; }
+.next-btn {
+  white-space: nowrap;
+  padding: 7px 10px;
+  border: 1px solid var(--accent);
+  background: var(--accent-weak);
+  color: var(--accent);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+}
+.next-btn:hover { background: var(--accent); color: #fff; }
 .print-stats { font-size: 12px; color: var(--muted); padding: 8px 10px; background: var(--panel-2); border-radius: 8px; }
 .print-stats b { color: var(--text); font-variant-numeric: tabular-nums; }
 

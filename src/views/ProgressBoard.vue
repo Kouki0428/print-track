@@ -1,15 +1,18 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { useWorksStore } from '@/stores/works'
 import { useUiStore } from '@/stores/ui'
 import { useToast } from '@/stores/toast'
 import { createPrintJob, listPrintJobs, deletePrintJob, typeLabel, STATUS_LABELS, type PrintJob, type Work, type WorkStatus } from '@/db/api'
 import StatusBadge from '@/components/StatusBadge.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
+import EmptyState from '@/components/EmptyState.vue'
 
 const works = useWorksStore()
 const ui = useUiStore()
 const toast = useToast()
+const router = useRouter()
 const columns: WorkStatus[] = ['planning', 'designing', 'making', 'done', 'overdue', 'failed']
 
 // 列头色条（与状态语义色对应）
@@ -179,7 +182,17 @@ async function doRemoveJob() {
       </div>
     </div>
 
-    <div class="board">
+    <!-- 没有任何项目时的引导 -->
+    <EmptyState
+      v-if="!works.works.length"
+      emoji="📋"
+      title="看板空空如也"
+      desc="先去「作品库」创建项目，再回到这里拖拽管理状态、记录打印。"
+    >
+      <button class="btn" @click="router.push('/library')">去作品库创建</button>
+    </EmptyState>
+
+    <div v-else class="board">
       <div
         v-for="col in columns"
         :key="col"

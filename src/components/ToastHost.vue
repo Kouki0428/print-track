@@ -26,6 +26,9 @@ function iconSvg(kind: string): string {
         >
           <span class="t-icon" v-html="iconSvg(t.kind)"></span>
           <span class="t-text">{{ t.text }}</span>
+          <button v-if="t.action" class="t-action" @click.stop="t.action?.run(); store.dismiss(t.id)">
+            {{ t.action.label }}
+          </button>
         </div>
       </TransitionGroup>
     </div>
@@ -62,6 +65,21 @@ function iconSvg(kind: string): string {
 .toast.success .t-icon { color: var(--green); }
 .toast.error .t-icon { color: var(--red); }
 .toast.info .t-icon { color: var(--accent); }
+.t-action {
+  flex-shrink: 0;
+  align-self: center;
+  margin-left: 4px;
+  padding: 4px 12px;
+  border-radius: 7px;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+}
+.t-action:hover { background: var(--accent-hover); }
 
 .toast-enter-active { transition: all 0.28s var(--ease-spring); }
 .toast-leave-active { transition: all 0.2s ease; }

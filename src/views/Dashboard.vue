@@ -72,6 +72,9 @@ const distribution = computed(() =>
   })),
 )
 
+// 悬停图例/分段时高亮联动
+const hoverStatus = ref<WorkStatus | null>(null)
+
 const recentWorks = computed(() =>
   [...scoped.value].sort((a, b) => b.updated_at.localeCompare(a.updated_at)).slice(0, 5),
 )
@@ -187,13 +190,24 @@ function shortDate(d: string): string {
             v-for="d in distribution"
             :key="d.status"
             class="seg grow-x"
-            :style="{ width: d.pct + '%', background: colorVar[d.status] }"
+            :style="{ width: d.pct + '%', background: colorVar[d.status], opacity: hoverStatus && hoverStatus !== d.status ? 0.25 : 1 }"
             :title="`${d.count} 件`"
+            @mouseenter="hoverStatus = d.status"
+            @mouseleave="hoverStatus = null"
           ></div>
         </div>
         <div v-else class="bar"><div class="seg" style="width:100%;background:var(--line-strong)"></div></div>
         <ul class="legend">
-          <li v-for="d in distribution" :key="d.status" class="clickable" title="筛选查看该状态" @click="goLibrary(d.status)">
+          <li
+            v-for="d in distribution"
+            :key="d.status"
+            class="clickable"
+            :class="{ dim: hoverStatus && hoverStatus !== d.status }"
+            title="筛选查看该状态"
+            @click="goLibrary(d.status)"
+            @mouseenter="hoverStatus = d.status"
+            @mouseleave="hoverStatus = null"
+          >
             <span class="dot" :style="{ background: colorVar[d.status] }"></span>
             <span class="lg-label"><StatusBadge :status="d.status" /></span>
             <span class="lg-count">{{ d.count }}</span>
@@ -281,10 +295,11 @@ function shortDate(d: string): string {
 .stat.clickable:hover { border-color: var(--accent); }
 
 .bar { display: flex; height: 14px; border-radius: 8px; overflow: hidden; background: var(--bg-soft); }
-.seg { height: 100%; transition: width 0.4s var(--ease-out); }
+.seg { height: 100%; transition: width 0.4s var(--ease-out), opacity 0.2s ease; }
 .legend { list-style: none; padding: 0; margin: 14px 0 0; display: grid; grid-template-columns: 1fr 1fr; gap: 6px 16px; }
 .legend li { display: flex; align-items: center; gap: 8px; font-size: 13px; padding: 3px 8px; border-radius: 8px; cursor: pointer; transition: var(--transition); }
 .legend li:hover { background: var(--hover); }
+.legend li.dim { opacity: 0.45; }
 .dot { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
 .lg-label { flex: 1; }
 .lg-count { font-weight: 700; font-variant-numeric: tabular-nums; }
