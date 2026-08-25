@@ -37,34 +37,14 @@ watch(
 
 const appVersion = __APP_VERSION__
 
-// ---- 侧边栏折叠（两段式动画：文字淡出 ⇄ 宽度过渡）----
+// ---- 侧边栏折叠（纯 transform 滑动：零逐帧重排）----
+// 侧边栏固定定位、宽度恒为 210px，收起 = translateX(-148px) 露出 62px 竖条；
+// 内容区 margin 一次性跳变（单帧重排），滑动全程走合成器，弱 GPU 也顺滑。
 const SIDEBAR_KEY = 'printtrack-sidebar-collapsed'
 const collapsed = ref(localStorage.getItem(SIDEBAR_KEY) === '1')
-const sidebarFading = ref(false)
-let fadeTimer: ReturnType<typeof setTimeout> | null = null
 function toggleCollapse() {
-  if (fadeTimer) {
-    clearTimeout(fadeTimer)
-    fadeTimer = null
-  }
-  if (!collapsed.value) {
-    // 收起：先淡出文字，再收窄宽度
-    sidebarFading.value = true
-    fadeTimer = setTimeout(() => {
-      collapsed.value = true
-      localStorage.setItem(SIDEBAR_KEY, '1')
-      fadeTimer = null
-    }, 150)
-  } else {
-    // 展开：先恢复宽度，再淡入文字
-    collapsed.value = false
-    localStorage.setItem(SIDEBAR_KEY, '0')
-    sidebarFading.value = true
-    fadeTimer = setTimeout(() => {
-      sidebarFading.value = false
-      fadeTimer = null
-    }, 200)
-  }
+  collapsed.value = !collapsed.value
+  localStorage.setItem(SIDEBAR_KEY, collapsed.value ? '1' : '0')
 }
 
 // ---- 快捷键帮助面板 ----
@@ -184,10 +164,10 @@ function onSpinEnd() {
 
 <template>
   <div class="app-shell">
-    <aside class="sidebar" :class="{ collapsed, fading: sidebarFading }">
+    <aside class="sidebar" :class="{ collapsed }">
       <div class="brand">
         <span class="logo">⬢</span>
-        <span v-if="!collapsed" class="brand-name fade-el">PrintTrack</span>
+        <span class="brand-name fade-el">PrintTrack</span>
         <button
           class="collapse-btn"
           :class="{ flipped: collapsed }"
@@ -200,7 +180,7 @@ function onSpinEnd() {
 
       <!-- 项目类型统一切换（自定义类型归入「其它」） -->
       <div class="type-switch">
-        <div v-if="!collapsed" class="type-switch-title fade-el">项目管理</div>
+        <div class="type-switch-title fade-el">项目管理</div>
         <button
           v-for="t in typeOptions"
           :key="t"
@@ -254,11 +234,11 @@ function onSpinEnd() {
             ? '<svg viewBox=\'0 0 24 24\' width=\'16\' height=\'16\' fill=\'none\' stroke=\'currentColor\' stroke-width=\'2\' stroke-linecap=\'round\' stroke-linejoin=\'round\'><circle cx=\'12\' cy=\'12\' r=\'4\'/><path d=\'M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4\'/></svg>'
             : '<svg viewBox=\'0 0 24 24\' width=\'16\' height=\'16\' fill=\'none\' stroke=\'currentColor\' stroke-width=\'2\' stroke-linecap=\'round\' stroke-linejoin=\'round\'><path d=\'M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8Z\'/></svg>'"></span>
           <span class="fade-el">{{ isDark ? '浅色' : '深色' }}</span>
-          <span v-if="!collapsed" class="version fade-el">{{ appVersion }}</span>
+          <span class="version fade-el">{{ appVersion }}</span>
         </button>
       </div>
     </aside>
-    <main class="content">
+    <main class="content" :class="{ rail: collapsed }">
       <div class="content-inner">
         <RouterView v-slot="{ Component }">
           <Transition name="page" mode="out-in">
@@ -283,33 +263,31 @@ function onSpinEnd() {
 </template>
 
 <style scoped>
-.app-shell { display: flex; height: 100vh; }
+.app-shell { display: block; height: 100vh; overflow: hidden; position: relative; }
+/* 侧边栏：固定定位，宽度恒定 210px，收起 = 整体左移 148px（纯 transform，零重排） */
 .sidebar {
+  position: fixed;
+  left: 0;
+  top: 0;
+  bottom: 0;
   width: 210px;
-  flex-shrink: 0;
+  z-index: 50;
   background: var(--panel);
   border-right: 1px solid var(--line);
   padding: 18px 12px;
   display: flex;
   flex-direction: column;
-  transition: width 0.3s var(--ease-out);
+  transform: translateX(0);
+  transition: transform 0.3s var(--ease-out);
 }
-/* 两段式折叠动画：fading 阶段文字淡出/淡入，collapsed 阶段改变宽度 */
-.sidebar .fade-el { transition: opacity 0.16s ease; }
-.sidebar.fading .fade-el { opacity: 0; }
-.sidebar.collapsed { width: 62px; padding-left: 8px; padding-right: 8px; }
-.sidebar.collapsed .type-switch-title,
-.sidebar.collapsed .nav-label,
-.sidebar.collapsed .nav-count,
-.sidebar.collapsed .theme-toggle span:nth-child(2),
-.sidebar.collapsed .version { display: none; }
-.sidebar.collapsed .brand { justify-content: center; flex-wrap: wrap; gap: 6px; }
-.sidebar.collapsed .type-btn,
-.sidebar.collapsed .nav-item { justify-content: center; padding-left: 0; padding-right: 0; }
-.sidebar.collapsed .nav-item { gap: 0; }
-.sidebar.collapsed .type-btn { gap: 0; }
-.sidebar.collapsed .type-btn span:last-child { display: none; }
-.sidebar.collapsed .theme-toggle { justify-content: center; }
+.sidebar.collapsed { transform: translateX(-148px); }
+/* 收起时折叠按钮跳到可见竖条内（跳变发生在画面外，不可见） */
+.sidebar.collapsed .collapse-btn { position: absolute; left: 17px; top: 24px; margin: 0; }
+
+/* 文字淡出/淡入：收起时随滑动快速淡出，展开时延迟淡入（图标先到位） */
+.sidebar .fade-el { transition: opacity 0.15s ease; }
+.sidebar.collapsed .fade-el { opacity: 0; transition: opacity 0.1s ease; }
+.sidebar:not(.collapsed) .fade-el { opacity: 1; transition: opacity 0.2s ease 0.12s; }
 
 .collapse-btn {
   border: 1px solid var(--line-strong);
@@ -483,7 +461,9 @@ function onSpinEnd() {
 .theme-toggle:hover { background: var(--hover); color: var(--text); }
 .version { margin-left: auto; font-size: 10px; opacity: 0.7; }
 
-.content { flex: 1; overflow: auto; padding: 24px 28px; }
+.content { margin-left: 210px; height: 100vh; overflow: auto; padding: 24px 28px; }
+/* 收起：内容区边距一次性跳变（单帧重排），无过渡动画 */
+.content.rail { margin-left: 62px; }
 .content-inner { max-width: 1560px; margin: 0 auto; }
 
 .page-enter-active { transition: opacity 0.18s var(--ease-out), transform 0.18s var(--ease-out); }
